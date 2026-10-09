@@ -21,42 +21,103 @@ Plot::Plot(
       yUnits(yUnits)
 {}
 
-
 void Plot::plot(
     const std::vector<double>& x,
     const std::vector<Series>& series
 ) const
 {
-    // TODO:
-    // Check all Series.y vectors
-    // are the same length as x.
+    // Make sure there is data to plot
+    if (x.empty() || series.empty()) {
+        std::cerr << "Error: no data to plot.\n";
+        return;
+    }
+
+    // Make sure the plot has a valid width
+    if (width <= 0) {
+        std::cerr << "Error: plot width must be greater than zero.\n";
+        return;
+    }
+
+    // Make sure every waveform has one Y value
+    // for every X value
+    for (const Series& waveform : series) {
+        if (waveform.y.size() != x.size()) {
+            std::cerr
+                << "Error: X and Y vector lengths do not match.\n";
+            return;
+        }
+    }
+
+    double minY = series[0].y[0];
+    double maxY = series[0].y[0];
+
+    for (const Series& waveform : series) {
+        for (double value : waveform.y) {
+            if (value < minY) {minY = value;}
+            if (value > maxY) {maxY = value;}
+        }
+    }
+
+    // Plot Lengend 
+    for (const Series& waveform : series)
+    {
+        std::cout
+            << waveform.symbol
+            << " = "
+            << waveform.name
+            << '\n';
+    }
+
+    std::cout << '\n';
 
 
-    // TODO:
-    // Find minimum and maximum Y
-    // across all Series.
+  
+    // Plot every timestep
+    for (std::size_t i = 0; i < x.size(); i++) {
+        // Create one blank terminal row
+        std::string row(width, ' ');
 
 
-    // TODO:
-    // Print legend.
+        // Add every waveform to this row
+        for (const Series& waveform : series) {
+            double y = waveform.y[i];
+
+            int position;
 
 
-    // TODO:
-    // For each x value:
-    //
-    // 1. Create a terminal row.
-    //
-    // 2. Convert each Series y value
-    //    to a horizontal position.
-    //
-    // 3. Put its symbol in that position.
-    //
-    // 4. Print the row.
-    //
-    // X increases DOWN the terminal.
-    // Y increases ACROSS the terminal.
+            // If every Y value is the same,
+            // place the waveform in the middle
+            if (maxY == minY) {position = width / 2;}
+            else {
+                // Convert Y into a value between 0 and 1
+                double normalised =
+                    (y - minY) / (maxY - minY);
 
 
-    // TODO:
-    // Print Y scale and units.
+                // Convert that into a terminal position
+                position =
+                    static_cast<int>(
+                        normalised * (width - 1)
+                    );
+            }
+
+
+            // Put the waveform symbol onto the row
+            row[position] = waveform.symbol;
+        }
+
+
+        // Print this timestep
+        std::cout
+            << x[i]
+            << " "
+            << xUnits
+            << " |"
+            << row
+            << "|\n";
+    }
+
+
+    // Print the Y range
+    std::cout << "\nY range: " << minY << " " << yUnits << " to " << maxY << " " << yUnits << std::endl;
 }

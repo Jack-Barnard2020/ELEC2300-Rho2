@@ -8,7 +8,7 @@
         2026/10/09 - Initial commit (Jack Barnard)
    ====================================== */
 
-#include "fourierSeries.hpp"
+#include "FourierSeries.hpp"
 #include <cmath>
 
 fourierSeries::fourierSeries(std::vector<double> sineCoefficents,
@@ -21,14 +21,27 @@ fourierSeries::fourierSeries(std::vector<double> sineCoefficents,
                       timeStep(timeStep), 
                       runTime(runTime) {};
 
-void generate() {
+void FourierSeries::generate()
+{
     xValues.clear();
     yValues.clear();
 
-    // TODO: Generate x values based on time step and run time
-    // TODO: Calculate y values using the Fourier series formula
+    for (double t = 0.0; t <= runTime; t += timeStep) {
+        double y = 0.0;
 
-};
+        for (std::size_t i = 0; i < sineCoefficients.size(); i++) {
+            int harmonic = i + 1;
+
+            double angle = 2.0 * PI * harmonic * fundamentalFrequency * t;
+
+            y += cosineCoefficients[i] * std::cos(angle)
+                + sineCoefficients[i] * std::sin(angle);
+        }
+
+        xValues.push_back(t);
+        yValues.push_back(y);
+    }
+}
 
 const std::vector<double>& getXValues() const {
     return xValues;
