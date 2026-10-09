@@ -9,6 +9,8 @@
    ====================================== */
 
 #include "Plotter.hpp"
+#include <cmath>
+#include <iomanip>
 #include <iostream>
 
 Plot::Plot(
@@ -63,7 +65,7 @@ void Plot::plot(
     {
         std::cout
             << waveform.symbol
-            << " = "
+            << " : "
             << waveform.name
             << '\n';
     }
@@ -107,9 +109,15 @@ void Plot::plot(
         }
 
 
-        // Print this timestep
+        // Print this timestep, fixed to 2 decimal places, and 0 padded to 6 characters before the decimal point
         std::cout
-            << x[i]
+            << std::fixed
+            << std::setprecision(2)
+            << (x[i] < 0.0 ? "-" : "")
+            << std::setw(9)
+            << std::setfill('0')
+            << std::abs(x[i])
+            << std::setfill(' ')
             << " "
             << xUnits
             << " |"
