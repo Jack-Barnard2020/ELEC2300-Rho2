@@ -71,7 +71,7 @@ Testing/
 *.elf
 *.exec
 *.exe
-test_plotting
+
 
 
 # VS Code directories

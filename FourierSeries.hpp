@@ -12,10 +12,10 @@
 
 #include <vector>
 
-class fourierSeries {
-    private:
-        std::vector<double> sineCoefficents;
-        std::vector<double> cosineCoefficents;
+class FourierSeries {
+private:
+        std::vector<double> sineCoefficients;
+        std::vector<double> cosineCoefficients;
 
         double fundamentalFrequency;
         double timeStep;
@@ -23,9 +23,9 @@ class fourierSeries {
 
         std::vector<double> xValues;
         std::vector<double> yValues;
-    public:
-        fourierSeries(std::vector<double> sineCoefficents,
-            std::vector<double> cosineCoefficents, 
+public:
+        FourierSeries(std::vector<double> sineCoefficients,
+            std::vector<double> cosineCoefficients,
             double fundamentalFrequency, 
             double timeStep, 
             double runTime);

@@ -11,15 +11,16 @@
 #include "FourierSeries.hpp"
 #include <cmath>
 
-fourierSeries::fourierSeries(std::vector<double> sineCoefficents,
-    std::vector<double> cosineCoefficents, 
+FourierSeries::FourierSeries(std::vector<double> sineCoefficients,
+    std::vector<double> cosineCoefficients,
     double fundamentalFrequency, 
     double timeStep, 
-    double runTime) : sineCoefficents(sineCoefficents), 
-                      cosineCoefficents(cosineCoefficents), 
+    double runTime) : sineCoefficients(sineCoefficients),
+                      cosineCoefficients(cosineCoefficients),
                       fundamentalFrequency(fundamentalFrequency), 
                       timeStep(timeStep), 
-                      runTime(runTime) {};
+                      runTime(runTime)
+{}
 
 void FourierSeries::generate()
 {
@@ -29,13 +30,20 @@ void FourierSeries::generate()
     for (double t = 0.0; t <= runTime; t += timeStep) {
         double y = 0.0;
 
-        for (std::size_t i = 0; i < sineCoefficients.size(); i++) {
+        for (std::size_t i = 0; i < sineCoefficients.size(); ++i) {
             int harmonic = i + 1;
 
-            double angle = 2.0 * PI * harmonic * fundamentalFrequency * t;
+            double angle =
+                2.0 * std::acos(-1.0)
+                * harmonic
+                * fundamentalFrequency
+                * t;
 
-            y += cosineCoefficients[i] * std::cos(angle)
-                + sineCoefficients[i] * std::sin(angle);
+            if (i < cosineCoefficients.size()) {
+                y += cosineCoefficients[i] * std::cos(angle);
+            }
+
+            y += sineCoefficients[i] * std::sin(angle);
         }
 
         xValues.push_back(t);
@@ -43,10 +51,10 @@ void FourierSeries::generate()
     }
 }
 
-const std::vector<double>& getXValues() const {
+const std::vector<double>& FourierSeries::getXValues() const {
     return xValues;
-};
+}
 
-const std::vector<double>& getYValues() const {
+const std::vector<double>& FourierSeries::getYValues() const {
     return yValues;
-};
+}
