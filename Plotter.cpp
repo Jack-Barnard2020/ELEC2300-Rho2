@@ -113,7 +113,7 @@ void Plot::plot(
         std::cout
             << std::fixed
             << std::setprecision(2)
-            << (x[i] < 0.0 ? "-" : "")
+            << (x[i] < 0.0 ? "-" : "+")
             << std::setw(9)
             << std::setfill('0')
             << std::abs(x[i])
@@ -122,7 +122,21 @@ void Plot::plot(
             << xUnits
             << " |"
             << row
-            << "|\n";
+            << "|";
+
+        // Print each Y value in the same order as the legend.
+        for (const Series& waveform : series) {
+            std::cout
+                << " "
+                << waveform.symbol
+                << " = "
+                << waveform.y[i]
+                << " "
+                << yUnits
+                << "    ";
+        }
+
+        std::cout << '\n';
     }
 
 

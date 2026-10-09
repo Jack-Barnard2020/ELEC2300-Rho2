@@ -19,7 +19,7 @@ int main()
 		negativeY[i] = -x[i];
 	}
 
-	Plot plotter(80, "s", "V");
+	Plot plotter(100, "s", "V");
 	Series positiveSeries{y, "y = x", '*'};
 	Series negativeSeries{negativeY, "y = -x", 'o'};
 	plotter.plot(x, {positiveSeries, negativeSeries});
