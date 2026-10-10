@@ -1,26 +1,42 @@
-// Test plotting the function y = x.
 #include "Plotter.hpp"
 
+#include <iostream>
 #include <vector>
 
 int main()
 {
-	constexpr int number_of_points = 201;
 	constexpr double minimum = -10.0;
 	constexpr double maximum = 10.0;
+	constexpr double step = 0.1;
+	constexpr int numberOfPoints =
+		static_cast<int>((maximum - minimum) / step) + 1;
 
-	std::vector<double> x(number_of_points);
-	std::vector<double> y(number_of_points);
-	std::vector<double> negativeY(number_of_points);
+	std::vector<double> x(numberOfPoints);
+	std::vector<double> positiveY(numberOfPoints);
+	std::vector<double> negativeY(numberOfPoints);
 
-	for (int i = 0; i < number_of_points; ++i) {
-		x[i] = minimum + (maximum - minimum) * i / (number_of_points - 1);
-		y[i] = x[i];
+	for (int i = 0; i < numberOfPoints; ++i) {
+		x[i] = minimum + step * i;
+		positiveY[i] = x[i];
 		negativeY[i] = -x[i];
 	}
 
-	Plot plotter(100, "s", "V");
-	Series positiveSeries{y, "y = x", '*'};
-	Series negativeSeries{negativeY, "y = -x", 'o'};
-	plotter.plot(x, {positiveSeries, negativeSeries});
+	Series positiveX = {
+		positiveY,
+		"Positive X",
+		'+',
+		PlotColor::Red
+	};
+
+	Series negativeX = {
+		negativeY,
+		"Negative X",
+		'-',
+		PlotColor::Blue
+	};
+
+	Plot plot(80, "x", "y");
+	std::string generatedPlot = plot.plot(x, {positiveX, negativeX});
+	std::cout << generatedPlot;
+	return 0;
 }

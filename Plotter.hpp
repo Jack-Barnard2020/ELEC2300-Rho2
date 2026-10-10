@@ -13,10 +13,22 @@
 #include <string>
 #include <vector>
 
+enum class PlotColor {
+    Default,
+    Red,
+    Green,
+    Yellow,
+    Blue,
+    Magenta,
+    Cyan,
+    White
+};
+
 struct Series {
     std::vector<double> y;
     std::string name;
     char symbol;
+    PlotColor color = PlotColor::Default;
 };
 
 
@@ -33,7 +45,7 @@ class Plot {
             const std::string& yUnits
         );
 
-        void plot(
+        std::string plot(
             const std::vector<double>& x,
             const std::vector<Series>& series
         ) const;
