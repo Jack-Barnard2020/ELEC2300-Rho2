@@ -17,37 +17,26 @@ Resistor::Resistor(
     double resistance
 )
     : Component(name, node1, node2, resistance) {
-        // Reject zero or negative resistance.
-        if (resistance <= 0.0) {
-            throw std::invalid_argument (
-                "Resistance must be greater than zero."
-            );
-        }
+
+    if (resistance <= 0.0) {
+        throw std::invalid_argument(
+            "Resistance must be greater than zero."
+        );
+    }
 }
 
-// Getter function for the resistance value.
 double Resistor::getResistance() const {
-    return resistance;
+    return getValue();
 }
 
-// Getter function for the conductance value.
 double Resistor::getConductance() const {
-    // Conductance is the reciprocal of resistance.
-    return 1.0 / resistance;
+    return 1.0 / getValue();
 }
 
-// Getter function for the current value.
 double Resistor::getCurrent(double voltage) const {
-    return voltage / resistance;
+    return voltage / getValue();
 }
 
 std::string Resistor::getType() const {
     return "Resistor";
 }
-
-/*
-[X] Reject zero or negative resistance.
-[X] Implement getConductance().
-[X] Implement getCurrent().
-[X] Test Ohm's law with known values.
-*/

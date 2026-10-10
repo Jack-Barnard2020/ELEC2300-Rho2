@@ -33,8 +33,8 @@ public:
         int positiveNode,
         int negativeNode,
         double amplitude,
-        double frequency,
-        double phase
+        double frequency, // in Hertz
+        double phase // in radians
     );
 
     double getVoltage(double time = 0.0) const;

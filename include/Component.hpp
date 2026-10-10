@@ -30,7 +30,7 @@ public:
 
     virtual ~Component() = default;
 
-    std::string getName() const;
+    const std::string& getName() const;
     int getNode1() const;
     int getNode2() const;
     double getValue() const;

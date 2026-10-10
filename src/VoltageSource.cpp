@@ -1,9 +1,9 @@
 /* =========== ELEC2300 - Rho2 ==========
     Project: Circuit Simulator
-    File: VoltageSource.cpp
+    File: VoltageSource.hpp
     Author: Jack Barnard
     Date: 2026/10/10
-    Description: Implementation file for voltage source functionality.
+    Description: Header file for voltage source functionality.
     Change Log:
         2026/10/10 - Initial commit (Jack Barnard)
    ====================================== */
@@ -50,18 +50,22 @@ VoltageSource::VoltageSource(
       frequency(frequency),
       phase(phase),
       isAC(true) {
-
-    // TODO: Validate the frequency.
+    if (frequency < 0.0) {
+        throw std::invalid_argument(
+            "Frequency must be non-negative."
+        );
+    }
 }
 
 double VoltageSource::getVoltage(double time) const {
     if (!isAC) {
-        return value;
+        return getValue();
     }
 
-    // TODO:
-    // Return amplitude * sin(2*pi*frequency*time + phase).
-    return 0.0;
+    return getValue()
+        * std::sin(
+            2.0 * PI * frequency * time + phase
+        );
 }
 
 double VoltageSource::getFrequency() const {
@@ -82,9 +86,9 @@ std::string VoltageSource::getType() const {
 
 
 /*
-[ ] Reject negative frequency.
-[ ] Implement the sinusoidal getVoltage() calculation.
-[ ] Document that phase is measured in radians.
-[ ] Decide whether amplitude means peak or RMS voltage.
-[ ] Decide how an AC source behaves in DC analysis.
+[ X ] Reject negative frequency.
+[ X ] Implement the sinusoidal getVoltage() calculation.
+[ X ] Document that phase is measured in radians.
+[ X ] Decide whether amplitude means peak or RMS voltage.
+[ X ] Decide how an AC source behaves in DC analysis.       DC analysis should treat AC sources as open circuits, so the voltage is effectively zero.
 */

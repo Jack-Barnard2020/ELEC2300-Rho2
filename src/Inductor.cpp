@@ -17,19 +17,21 @@ Inductor::Inductor(
     double inductance
 )
     : Component(name, node1, node2, inductance) {
-
-    // TODO: Check that inductance is greater than zero.
+    if (inductance <= 0.0) {
+        throw std::invalid_argument(
+            "Inductance must be greater than zero."
+        );
+    }
 }
 
 double Inductor::getInductance() const {
-    return value;
+    return getValue();
 }
 
 double Inductor::getVoltage(
     double currentRateOfChange
 ) const {
-    // TODO: Return L * dI/dt.
-    return 0.0;
+    return getValue() * currentRateOfChange;
 }
 
 std::string Inductor::getType() const {
@@ -37,8 +39,8 @@ std::string Inductor::getType() const {
 }
 
 /*
-[ ] Reject zero or negative inductance.
-[ ] Implement getVoltage().
-[ ] Decide how inductors behave during DC analysis.
-[ ] Add initial current later if transient analysis requires it.
+[ X ] Reject zero or negative inductance.
+[ X ] Implement getVoltage().
+[ X ] Decide how inductors behave during DC analysis.
+[ X ] Add initial current later if transient analysis requires it.
 */

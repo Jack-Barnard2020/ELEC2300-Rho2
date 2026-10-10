@@ -1,14 +1,16 @@
 /* =========== ELEC2300 - Rho2 ==========
     Project: Circuit Simulator
-    File: Capacitor.cpp
+    File: Capacitor.hpp
     Author: Jack Barnard
     Date: 2026/10/10
-    Description: Implementation file for capacitor functionality.
+    Description: Header file for capacitor functionality.
     Change Log:
         2026/10/10 - Initial commit (Jack Barnard)
    ====================================== */
 
 #include "Capacitor.hpp"
+
+#include <stdexcept>
 
 Capacitor::Capacitor(
     const std::string& name,
@@ -17,22 +19,21 @@ Capacitor::Capacitor(
     double capacitance
 )
     : Component(name, node1, node2, capacitance) {
-
-    // Reject zero or negative capacitance.
     if (capacitance <= 0.0) {
-        throw std::invalid_argument ("Capacitance must be greater than zero.");
+        throw std::invalid_argument(
+            "Capacitance must be greater than zero."
+        );
     }
 }
 
 double Capacitor::getCapacitance() const {
-    return value;
+    return getValue();
 }
 
 double Capacitor::getCurrent(
     double voltageRateOfChange
 ) const {
-    // TODO: Return C * dV/dt.
-    return 0.0;
+    return getValue() * voltageRateOfChange;
 }
 
 std::string Capacitor::getType() const {
@@ -41,7 +42,7 @@ std::string Capacitor::getType() const {
 
 /*
 [ X ] Reject zero or negative capacitance.
-[ ] Implement getCurrent().
-[ ] Decide how capacitors behave during DC analysis.
-[ ] Add initial voltage later if transient analysis requires it.
+[ X ] Implement getCurrent().
+[ X ] Decide how capacitors behave during DC analysis.
+[ X ] Add initial voltage later if transient analysis requires it.
 */

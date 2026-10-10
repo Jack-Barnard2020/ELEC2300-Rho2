@@ -1,19 +1,19 @@
-/* ==*======== ELEC2300 - Rho2 =========*
+/* =========== ELEC2300 - Rho2 ==========
     Project: Circuit Simulator
-  * File: FourierSeries.cpp
-    Autho*: Jack Barnard
-    Date: 2026/10/0*
-    Description: Implementation file for generating Fourier series waveforms.
-
+    File: FourierSeries.hpp
+    Author: Jack Barnard
+    Date: 2026/10/10
+    Description: Header file for Fourier series functionality.
     Change Log:
-        2026/10/09 - Initial commit (Jack Barnard)
-        2026/10/10 - Improved readability and documentation
+        2026/10/10 - Initial commit (Jack Barnard)
    ====================================== */
-
+   
 #include "FourierSeries.hpp"
 
+#include <algorithm>
 #include <cmath>
-
+#include <stdexcept>
+#include <utility>
 
 FourierSeries::FourierSeries(
     std::vector<double> sineCoefficients,
@@ -22,67 +22,36 @@ FourierSeries::FourierSeries(
     double timeStep,
     double runTime
 )
-    : sineCoefficients(sineCoefficients),
-      cosineCoefficients(cosineCoefficients),
+    : sineCoefficients(std::move(sineCoefficients)),
+      cosineCoefficients(std::move(cosineCoefficients)),
       fundamentalFrequency(fundamentalFrequency),
       timeStep(timeStep),
-      runTime(runTime)
-{}
+      runTime(runTime) {
+    if (fundamentalFrequency < 0.0) throw std::invalid_argument("Fundamental frequency must be non-negative.");
+    if (timeStep <= 0.0) throw std::invalid_argument("Time step must be greater than zero.");
+    if (runTime < 0.0) throw std::invalid_argument("Run time must be non-negative.");
+}
 
-
-void FourierSeries::generate()
-{
-    // Remove any results from a previous call to generate().
+void FourierSeries::generate() {
     xValues.clear();
     yValues.clear();
+    const std::size_t fullSteps = static_cast<std::size_t>(std::floor(runTime / timeStep));
+    const bool needsFinalSample = fullSteps * timeStep < runTime;
+    const std::size_t sampleCount = fullSteps + 1 + (needsFinalSample ? 1 : 0);
+    const std::size_t harmonics = std::max(sineCoefficients.size(), cosineCoefficients.size());
 
-    // Generate one waveform sample for each timestep.
-    for (double time = 0.0;
-         time <= runTime;
-         time += timeStep) {
-
+    for (std::size_t sample = 0; sample < sampleCount; ++sample) {
+        const double time = (sample == sampleCount - 1 && needsFinalSample) ? runTime : sample * timeStep;
         double amplitude = 0.0;
-
-        // Each coefficient corresponds to one harmonic.
-        // Vector index 0 is harmonic 1, index 1 is harmonic 2, etc.
-        for (std::size_t i = 0;
-             i < sineCoefficients.size();
-             ++i) {
-
-            const int harmonic = static_cast<int>(i) + 1;
-
-            // Calculate the angle 2*pi*n*f*t for this harmonic.
-            const double angle =
-                2.0
-                * std::acos(-1.0)
-                * harmonic
-                * fundamentalFrequency
-                * time;
-
-            // A cosine coefficient may not exist if the cosine vector
-            // is shorter than the sine coefficient vector.
-            if (i < cosineCoefficients.size()) {
-                amplitude +=
-                    cosineCoefficients[i] * std::cos(angle);
-            }
-
-            amplitude +=
-                sineCoefficients[i] * std::sin(angle);
+        for (std::size_t i = 0; i < harmonics; ++i) {
+            const double angle = 2.0 * std::acos(-1.0) * (i + 1) * fundamentalFrequency * time;
+            if (i < cosineCoefficients.size()) amplitude += cosineCoefficients[i] * std::cos(angle);
+            if (i < sineCoefficients.size()) amplitude += sineCoefficients[i] * std::sin(angle);
         }
-
         xValues.push_back(time);
         yValues.push_back(amplitude);
     }
 }
 
-
-const std::vector<double>& FourierSeries::getXValues() const
-{
-    return xValues;
-}
-
-
-const std::vector<double>& FourierSeries::getYValues() const
-{
-    return yValues;
-}
+const std::vector<double>& FourierSeries::getXValues() const { return xValues; }
+const std::vector<double>& FourierSeries::getYValues() const { return yValues; }

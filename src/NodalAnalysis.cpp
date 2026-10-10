@@ -1,25 +1,28 @@
-/* =========== ELEC2300 - Rho2 ==========
-    Project: Circuit Simulator
-    File: NodalAnalysis.cpp
-    Author: Jack Barnard
-    Date: 2026/10/10
-    Description: Implementation file for running nodal analysis functionality.
+/* =========== ELEC2300 - Rho2 *=========
+    Project: Circuit Sim*lator
+    File: NodalAnalysis.hpp
+*   Author: Jack Barnard
+    Date: *026/10/10
+    Description: Header file for nodal analysis functionality.
     Change Log:
         2026/10/10 - Initial commit (Jack Barnard)
    ====================================== */
-
+   
 #include "NodalAnalysis.hpp"
-
 #include "Capacitor.hpp"
 #include "Inductor.hpp"
 #include "Resistor.hpp"
 #include "VoltageSource.hpp"
 
-NodalAnalysis::NodalAnalysis(
-    const Circuit& circuit
-)
-    : circuit(circuit) {
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
+
+namespace {
+constexpr double pivotTolerance = 1e-12;
 }
+
+NodalAnalysis::NodalAnalysis(const Circuit& circuit) : circuit(circuit) {}
 
 std::vector<double> NodalAnalysis::solve() {
     createSystem();
@@ -28,121 +31,106 @@ std::vector<double> NodalAnalysis::solve() {
     handleCapacitors();
     handleInductors();
     solveSystem();
-
     return nodeVoltages;
 }
 
-const std::vector<double>&
-NodalAnalysis::getNodeVoltages() const {
-    return nodeVoltages;
-}
+const std::vector<double>& NodalAnalysis::getNodeVoltages() const { return nodeVoltages; }
 
 void NodalAnalysis::createSystem() {
-    // TODO: Determine the number of unknowns.
-
-    // TODO: Resize matrix and initialise entries to zero.
-
-    // TODO: Resize the right-hand-side vector.
-
-    // TODO: Resize the node-voltage result vector.
+    const std::size_t nodeUnknowns = static_cast<std::size_t>(circuit.getHighestNode());
+    std::size_t extraUnknowns = 0;
+    for (const auto& component : circuit.getComponents()) {
+        if (const auto* source = dynamic_cast<const VoltageSource*>(component.get())) {
+            if (!source->getIsAC()) ++extraUnknowns;
+        } else if (dynamic_cast<const Inductor*>(component.get()) != nullptr) {
+            ++extraUnknowns;
+        }
+    }
+    const std::size_t total = nodeUnknowns + extraUnknowns;
+    if (total == 0) throw std::runtime_error("Cannot analyse an empty circuit.");
+    matrix.assign(total, std::vector<double>(total, 0.0));
+    rightHandSide.assign(total, 0.0);
+    nodeVoltages.assign(nodeUnknowns, 0.0); // Ground node 0 is not included.
 }
 
 void NodalAnalysis::addResistors() {
-    for (const auto& component :
-         circuit.getComponents()) {
-
-        const Resistor* resistor =
-            dynamic_cast<const Resistor*>(
-                component.get()
-            );
-
-        if (resistor == nullptr) {
-            continue;
+    for (const auto& component : circuit.getComponents()) {
+        if (const auto* resistor = dynamic_cast<const Resistor*>(component.get())) {
+            stampResistor(resistor->getNode1(), resistor->getNode2(), resistor->getConductance());
         }
-
-        stampResistor(
-            resistor->getNode1(),
-            resistor->getNode2(),
-            resistor->getConductance()
-        );
     }
 }
 
-void NodalAnalysis::stampResistor(
-    int node1,
-    int node2,
-    double conductance
-) {
-    /*
-     * TODO: Add conductance to the diagonal entries.
-     *
-     * TODO: Subtract conductance from the
-     * off-diagonal entries.
-     *
-     * Remember:
-     * - Node 0 is ground.
-     * - Node 1 maps to matrix index 0.
-     * - Node 2 maps to matrix index 1.
-     */
+void NodalAnalysis::stampResistor(int node1, int node2, double conductance) {
+    if (node1 != 0) matrix[node1 - 1][node1 - 1] += conductance;
+    if (node2 != 0) matrix[node2 - 1][node2 - 1] += conductance;
+    if (node1 != 0 && node2 != 0) {
+        matrix[node1 - 1][node2 - 1] -= conductance;
+        matrix[node2 - 1][node1 - 1] -= conductance;
+    }
 }
 
 void NodalAnalysis::addVoltageSources() {
-    /*
-     * TODO:
-     *
-     * Decide whether to:
-     *
-     * 1. Restrict voltage-source positions, or
-     * 2. Implement modified nodal analysis.
-     *
-     * Modified nodal analysis adds an unknown current
-     * for each ideal voltage source.
-     */
+    std::size_t sourceIndex = nodeVoltages.size();
+    for (const auto& component : circuit.getComponents()) {
+        const auto* source = dynamic_cast<const VoltageSource*>(component.get());
+        if (source == nullptr || source->getIsAC()) continue; // AC sources are inactive in DC analysis.
+        const int positive = source->getNode1();
+        const int negative = source->getNode2();
+        if (positive != 0) matrix[positive - 1][sourceIndex] = matrix[sourceIndex][positive - 1] = 1.0;
+        if (negative != 0) matrix[negative - 1][sourceIndex] = matrix[sourceIndex][negative - 1] = -1.0;
+        rightHandSide[sourceIndex] = source->getVoltage(0.0);
+        ++sourceIndex;
+    }
 }
 
 void NodalAnalysis::handleCapacitors() {
-    /*
-     * TODO:
-     *
-     * For DC steady state, determine how the capacitor
-     * should be represented.
-     */
+    // Capacitors are open circuits at DC steady state, so no matrix stamp is required.
 }
 
 void NodalAnalysis::handleInductors() {
-    /*
-     * TODO:
-     *
-     * For DC steady state, determine how the inductor
-     * should be represented.
-     */
+    std::size_t sourceIndex = nodeVoltages.size();
+    for (const auto& component : circuit.getComponents()) {
+        if (const auto* source = dynamic_cast<const VoltageSource*>(component.get())) {
+            if (!source->getIsAC()) ++sourceIndex;
+        }
+    }
+    for (const auto& component : circuit.getComponents()) {
+        const auto* inductor = dynamic_cast<const Inductor*>(component.get());
+        if (inductor == nullptr) continue;
+        const int node1 = inductor->getNode1();
+        const int node2 = inductor->getNode2();
+        if (node1 != 0) matrix[node1 - 1][sourceIndex] = matrix[sourceIndex][node1 - 1] = 1.0;
+        if (node2 != 0) matrix[node2 - 1][sourceIndex] = matrix[sourceIndex][node2 - 1] = -1.0;
+        ++sourceIndex; // RHS is zero, modelling a DC short circuit.
+    }
 }
 
 void NodalAnalysis::solveSystem() {
-    /*
-     * TODO:
-     *
-     * Solve:
-     *
-     * matrix * nodeVoltages = rightHandSide
-     *
-     * Possible method:
-     * - Gaussian elimination with partial pivoting
-     */
+    const std::size_t n = matrix.size();
+    for (std::size_t column = 0; column < n; ++column) {
+        std::size_t pivot = column;
+        for (std::size_t row = column + 1; row < n; ++row) {
+            if (std::abs(matrix[row][column]) > std::abs(matrix[pivot][column])) pivot = row;
+        }
+        if (std::abs(matrix[pivot][column]) < pivotTolerance) {
+            throw std::runtime_error("Circuit matrix is singular; check for floating nodes or conflicting ideal sources.");
+        }
+        std::swap(matrix[column], matrix[pivot]);
+        std::swap(rightHandSide[column], rightHandSide[pivot]);
+        for (std::size_t row = column + 1; row < n; ++row) {
+            const double factor = matrix[row][column] / matrix[column][column];
+            matrix[row][column] = 0.0;
+            for (std::size_t k = column + 1; k < n; ++k) matrix[row][k] -= factor * matrix[column][k];
+            rightHandSide[row] -= factor * rightHandSide[column];
+        }
+    }
+
+    std::vector<double> solution(n, 0.0);
+    for (std::size_t reverse = n; reverse-- > 0;) {
+        double value = rightHandSide[reverse];
+        for (std::size_t column = reverse + 1; column < n; ++column) value -= matrix[reverse][column] * solution[column];
+        solution[reverse] = value / matrix[reverse][reverse];
+    }
+    std::copy_n(solution.begin(), nodeVoltages.size(), nodeVoltages.begin());
 }
-
-
-/*
-[ ] Determine the number of voltage unknowns.
-[ ] Map circuit nodes to matrix indices.
-[ ] Allocate the matrix and vectors.
-[ ] Implement resistor stamping.
-[ ] Decide how ideal voltage sources are handled.
-[ ] Implement modified nodal analysis if required.
-[ ] Define the DC capacitor model.
-[ ] Define the DC inductor model.
-[ ] Implement Gaussian elimination.
-[ ] Add partial pivoting.
-[ ] Detect singular matrices and floating nodes.
-[ ] Document whether ground appears in the result vector.
-*/
