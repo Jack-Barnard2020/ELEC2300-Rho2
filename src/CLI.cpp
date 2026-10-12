@@ -8,7 +8,7 @@
         2026/10/12 - Initial commit (Jack Barnard)
    ====================================== */
 
-#include "CommandLineInterface.hpp"
+#include "CLI.hpp"
 
 #include <iostream>
 #include <string>
@@ -79,7 +79,7 @@ void CLI::run() {
         << "\n";
 }
 
-void CLI::clearScreen() {
+void CLI::clearScreen() const {
     std::cout << "\033[2J\033[1;1H";
 }
 

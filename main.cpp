@@ -6,7 +6,7 @@
     Description: Entry point for the circuit simulator.
    ====================================== */
 
-#include "CLI.h"
+#include "CLI.hpp"
 
 #include <exception>
 #include <iostream>
