@@ -9,6 +9,7 @@
    ====================================== */
 
 #include "Inductor.hpp"
+#include <stdexcept>
 
 Inductor::Inductor(
     const std::string& name,

@@ -9,6 +9,7 @@
    ====================================== */
 
 #include "Component.hpp"
+#include <stdexcept>
 
 Component::Component(
     const std::string& name,

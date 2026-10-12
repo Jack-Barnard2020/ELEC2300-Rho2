@@ -9,6 +9,7 @@
    ====================================== */
 
 #include "Resistor.hpp"
+#include <stdexcept>
 
 Resistor::Resistor(
     const std::string& name,
