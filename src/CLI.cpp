@@ -11,6 +11,7 @@
 #include "CLI.hpp"
 #include "ReadNetlist.hpp"
 #include "VoltageSource.hpp"
+#include "NodalAnalysis.hpp"
 
 #include <exception>
 #include <iomanip>
@@ -184,6 +185,7 @@ void CLI::loadNetlist()
         currentNetlistFilename = filename;
 
         showComponentList();
+        analysisMenu();
     }
     catch (const std::exception& error) {
         showHeader("Error Loading Netlist");
@@ -310,4 +312,130 @@ void CLI::waitForEnter() const
         << RESET;
 
     std::cin.get();
+}
+
+void CLI::analysisMenu()
+{
+    bool analysisRunning = true;
+
+    while (analysisRunning && running) {
+        showHeader("Analysis Menu");
+
+        std::cout
+            << "Choose the type of analysis to perform:\n\n"
+            << "1. DC Operating Point (Nodal Analysis)\n"
+            << "2. Transient Analysis\n"
+            << "3. Return to Main Menu\n"
+            << "4. Quit\n\n"
+            << "Select an option: ";
+
+        std::string choice;
+        std::getline(std::cin, choice);
+
+        if (choice == "1") {
+            runDCAnalysis();
+        }
+        else if (choice == "2") {
+            showHeader("Transient Analysis");
+
+            std::cout
+                << YELLOW
+                << "COMING SOON\n"
+                << RESET;
+
+            waitForEnter();
+        }
+        else if (choice == "3") {
+            analysisRunning = false;
+        }
+        else if (choice == "4") {
+            running = false;
+            analysisRunning = false;
+        }
+        else {
+            std::cout
+                << RED
+                << "\nInvalid option. Please enter 1, 2, 3 or 4.\n"
+                << RESET;
+
+            waitForEnter();
+        }
+    }
+}
+
+void CLI::runDCAnalysis() {
+    showHeader("DC Operating Point");
+
+    if (!circuit.has_value()) {
+        std::cout
+            << RED
+            << "No circuit is currently loaded.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
+    std::cout
+        << "Calculating DC operating point...\n\n"
+        << std::flush;
+
+    try {
+        NodalAnalysis analysis(*circuit);
+
+        const auto nodeVoltages = analysis.solve();
+
+        showHeader("DC Operating Point");
+
+        std::cout
+            << GREEN
+            << "DC analysis completed successfully.\n"
+            << RESET
+            << '\n';
+
+        std::cout
+            << std::left
+            << std::setw(12) << "Node"
+            << "Voltage (V)\n";
+
+        std::cout
+            << "----------------------------\n";
+
+        // Ground is always 0 V.
+        std::cout
+            << std::left
+            << std::setw(12) << 0
+            << 0.0
+            << '\n';
+
+        /*
+         * The returned vector contains the voltages for
+         * non-ground nodes.
+         */
+        for (std::size_t index = 0;
+             index < nodeVoltages.size();
+             ++index) {
+
+            const std::size_t nodeNumber = index + 1;
+
+            std::cout
+                << std::left
+                << std::setw(12) << nodeNumber
+                << nodeVoltages.at(index)
+                << '\n';
+        }
+
+        std::cout
+            << "----------------------------\n";
+    }
+    catch (const std::exception& error) {
+        std::cout
+            << RED
+            << "DC analysis failed.\n\n"
+            << RESET
+            << error.what()
+            << '\n';
+    }
+
+    waitForEnter();
 }
