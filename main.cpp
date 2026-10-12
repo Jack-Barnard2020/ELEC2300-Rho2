@@ -1,8 +1,26 @@
 /* =========== ELEC2300 - Rho2 ==========
     Project: Circuit Simulator
+    File: main.cpp
     Author: Jack Barnard
-    Date: 2026/10/05
-    Description: Circuit simulator with plotter and UI (potentially a GUI)
-    Change Log:
-        2026/10/05 - Initial commit (Jack Barnard)
+    Date: 2026/10/12
+    Description: Entry point for the circuit simulator.
    ====================================== */
+
+#include "CLI.h"
+
+#include <exception>
+#include <iostream>
+
+int main()
+{
+    try {
+        CLI interface;
+        interface.run();
+    }
+    catch (const std::exception& error) {
+        std::cerr << "Fatal error: " << error.what() << '\n';
+        return 1;
+    }
+
+    return 0;
+}
