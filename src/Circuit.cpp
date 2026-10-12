@@ -1,9 +1,9 @@
 /* =========== ELEC2300 - Rho2 ==========
     Project: Circuit Simulator
-    File: Circuit.hpp
+    File: Circuit.cpp
     Author: Jack Barnard
     Date: 2026/10/10
-    Description: Header file for circuit functionality.
+    Description: Implementation of circuit functionality.
     Change Log:
         2026/10/10 - Initial commit (Jack Barnard)
    ====================================== */
@@ -19,12 +19,14 @@ void Circuit::addComponent(std::unique_ptr<Component> component) {
     if (!component) {
         throw std::invalid_argument("Cannot add a null component.");
     }
+    // Component names act as circuit-wide identifiers and must be unique.
     if (std::find_if(components.begin(), components.end(),
         [&component](const std::unique_ptr<Component>& current) {
             return current->getName() == component->getName();
         }) != components.end()) {
         throw std::invalid_argument("Cannot add a component with a duplicate name.");
     }
+    // Update topology metadata before transferring ownership to the circuit.
     updateHighestNode(*component);
     components.push_back(std::move(component));
 }
@@ -42,8 +44,12 @@ const Component* Circuit::getComponentByName(const std::string& requestedName) c
     return nullptr;
 }
 
-std::size_t Circuit::getNumberOfComponents() const { return components.size(); }
-int Circuit::getHighestNode() const { return highestNode; }
+std::size_t Circuit::getNumberOfComponents() const {
+    return components.size();
+}
+int Circuit::getHighestNode() const {
+    return highestNode;
+}
 
 void Circuit::updateHighestNode(const Component& component) {
     highestNode = std::max({highestNode, component.getNode1(), component.getNode2()});

@@ -1,30 +1,16 @@
-/* =========== ELEC2300 - Rho2 ==========
-    Project: Circuit Simulator
-    File: FirstOrderODESolver.hpp
-    Author: Jack Barnard
-    Date: 2026/10/10
-    Description: Header file for solving first-order ordinary differential equations (ODEs) using numerical methods.
-    Change Log:
-        2026/10/10 - Initial commit (Jack Barnard)
-   ====================================== */
-
 #pragma once
 
 #include <functional>
 #include <vector>
 
+// Solves first-order ordinary differential equations numerically.
 class FirstOrderODESolver {
 public:
-    using ODEFunction =
-        std::function<double(double, double)>;
+    using ODEFunction = std::function<double(double, double)>;
 
-private:
-    std::vector<double> xValues;
-    std::vector<double> yValues;
-
-public:
     FirstOrderODESolver() = default;
 
+    // Generates samples using the explicit Euler method.
     void solveEuler(
         const ODEFunction& derivative,
         double initialX,
@@ -33,11 +19,11 @@ public:
         double finalX
     );
 
-    const std::vector<double>&
-    getXValues() const;
-
-    const std::vector<double>&
-    getYValues() const;
-
+    [[nodiscard]] const std::vector<double>& getXValues() const;
+    [[nodiscard]] const std::vector<double>& getYValues() const;
     void clear();
+
+private:
+    std::vector<double> xValues;
+    std::vector<double> yValues;
 };

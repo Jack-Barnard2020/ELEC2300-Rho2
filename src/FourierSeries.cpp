@@ -1,9 +1,9 @@
 /* =========== ELEC2300 - Rho2 ==========
     Project: Circuit Simulator
-    File: FourierSeries.hpp
+    File: FourierSeries.cpp
     Author: Jack Barnard
     Date: 2026/10/10
-    Description: Header file for Fourier series functionality.
+    Description: Implementation of Fourier series functionality.
     Change Log:
         2026/10/10 - Initial commit (Jack Barnard)
    ====================================== */
@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <numbers>
 #include <utility>
 
 FourierSeries::FourierSeries(
@@ -27,12 +28,19 @@ FourierSeries::FourierSeries(
       fundamentalFrequency(fundamentalFrequency),
       timeStep(timeStep),
       runTime(runTime) {
-    if (fundamentalFrequency < 0.0) throw std::invalid_argument("Fundamental frequency must be non-negative.");
-    if (timeStep <= 0.0) throw std::invalid_argument("Time step must be greater than zero.");
-    if (runTime < 0.0) throw std::invalid_argument("Run time must be non-negative.");
+    if (fundamentalFrequency < 0.0) {
+        throw std::invalid_argument("Fundamental frequency must be non-negative.");
+    }
+    if (timeStep <= 0.0) {
+        throw std::invalid_argument("Time step must be greater than zero.");
+    }
+    if (runTime < 0.0) {
+        throw std::invalid_argument("Run time must be non-negative.");
+    }
 }
 
 void FourierSeries::generate() {
+    // Regeneration replaces previous samples rather than appending to them.
     xValues.clear();
     yValues.clear();
     const std::size_t fullSteps = static_cast<std::size_t>(std::floor(runTime / timeStep));
@@ -42,9 +50,10 @@ void FourierSeries::generate() {
 
     for (std::size_t sample = 0; sample < sampleCount; ++sample) {
         const double time = (sample == sampleCount - 1 && needsFinalSample) ? runTime : sample * timeStep;
+        // Sum each available sine and cosine harmonic at this time.
         double amplitude = 0.0;
         for (std::size_t i = 0; i < harmonics; ++i) {
-            const double angle = 2.0 * std::acos(-1.0) * (i + 1) * fundamentalFrequency * time;
+            const double angle = 2.0 * std::numbers::pi * (i + 1) * fundamentalFrequency * time;
             if (i < cosineCoefficients.size()) amplitude += cosineCoefficients[i] * std::cos(angle);
             if (i < sineCoefficients.size()) amplitude += sineCoefficients[i] * std::sin(angle);
         }
@@ -53,5 +62,9 @@ void FourierSeries::generate() {
     }
 }
 
-const std::vector<double>& FourierSeries::getXValues() const { return xValues; }
-const std::vector<double>& FourierSeries::getYValues() const { return yValues; }
+const std::vector<double>& FourierSeries::getXValues() const {
+    return xValues;
+}
+const std::vector<double>& FourierSeries::getYValues() const {
+    return yValues;
+}

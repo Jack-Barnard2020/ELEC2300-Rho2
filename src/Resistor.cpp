@@ -31,10 +31,12 @@ double Resistor::getResistance() const {
 }
 
 double Resistor::getConductance() const {
+    // Conductance is the reciprocal of resistance.
     return 1.0 / getValue();
 }
 
 double Resistor::getCurrent(double voltage) const {
+    // Ohm's law: I = V / R.
     return voltage / getValue();
 }
 

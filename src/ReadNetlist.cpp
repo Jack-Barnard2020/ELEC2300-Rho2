@@ -1,9 +1,9 @@
 /* =========== ELEC2300 - Rho2 ==========
     Project: Circuit Simulator
-    File: ReadNetlist.hpp
+    File: ReadNetlist.cpp
     Author: Jack Barnard
     Date: 2026/10/10
-    Description: Header file for reading and parsing circuit netlists.
+    Description: Implementation of reading and parsing circuit netlists.
     Change Log:
         2026/10/10 - Initial commit (Jack Barnard)
    ====================================== */
@@ -34,6 +34,7 @@ Circuit ReadNetlist::read() const {
     std::size_t lineNumber = 0;
     while (std::getline(inputFile, line)) {
         ++lineNumber;
+        // Strip comments before deciding whether the line contains a component.
         line = removeComment(line);
         if (!tokenise(line).empty()) {
             parseLine(line, lineNumber, circuit);
@@ -99,13 +100,13 @@ double ReadNetlist::parseValue(const std::string& token) const {
     const double number = std::stod(token, &consumed);
     if (consumed == token.size()) return number;
 
-    static const std::unordered_map<std::string, double> scale = {
+    static const std::unordered_map<std::string, double> kScaleFactors = {
         {"T", 1e12}, {"G", 1e9}, {"M", 1e6}, {"k", 1e3},
         {"m", 1e-3}, {"u", 1e-6}, {"n", 1e-9}, {"p", 1e-12}
     };
     const std::string suffix = token.substr(consumed);
-    const auto found = scale.find(suffix);
-    if (found == scale.end()) {
+    const auto found = kScaleFactors.find(suffix);
+    if (found == kScaleFactors.end()) {
         throw std::invalid_argument("invalid numeric value '" + token + "'");
     }
     return number * found->second;

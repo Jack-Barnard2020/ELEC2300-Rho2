@@ -22,17 +22,17 @@ Component::Component(
       node2(node2),
       value(value) {
     
-    // Validate that the name is not empty.
+    // Every component needs a stable identifier for lookup and diagnostics.
     if (name.empty()) {
         throw std::invalid_argument("Component name cannot be empty.");
     }
 
-    // Validate that node numbers are non-negative.
+    // Node zero is ground; negative node numbers are invalid.
     if (node1 < 0 || node2 < 0) {
         throw std::invalid_argument("Node numbers must be non-negative.");
     }
 
-    // Make sure node1 and node2 are not the same.
+    // A two-terminal component must connect two distinct nodes.
     if (node1 == node2) {
         throw std::invalid_argument("Node1 and Node2 cannot be the same.");
     }
@@ -56,9 +56,3 @@ double Component::getValue() const {
     return value;
 }
 
-/*
-[ X ] Validate that the name is not empty.
-[ X ] Validate that node numbers are non-negative.
-[ X ] Make sure node1 and node2 are not the same.
-[ X ] Consider returning the name as const std::string&.
-*/

@@ -18,6 +18,7 @@ Inductor::Inductor(
     double inductance
 )
     : Component(name, node1, node2, inductance) {
+    // A non-positive inductance is not meaningful for this model.
     if (inductance <= 0.0) {
         throw std::invalid_argument(
             "Inductance must be greater than zero."
@@ -32,6 +33,7 @@ double Inductor::getInductance() const {
 double Inductor::getVoltage(
     double currentRateOfChange
 ) const {
+    // Inductor constitutive relation: v = L(di/dt).
     return getValue() * currentRateOfChange;
 }
 
@@ -39,9 +41,3 @@ std::string Inductor::getType() const {
     return "Inductor";
 }
 
-/*
-[ X ] Reject zero or negative inductance.
-[ X ] Implement getVoltage().
-[ X ] Decide how inductors behave during DC analysis.
-[ X ] Add initial current later if transient analysis requires it.
-*/

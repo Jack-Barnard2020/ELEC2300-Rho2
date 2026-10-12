@@ -1,9 +1,9 @@
 /* =========== ELEC2300 - Rho2 *=========
     Project: Circuit Simulator
-    File: NodalAnalysis.hpp
+    File: NodalAnalysis.cpp
     Author: Jack Barnard
     Date: 2026/10/10
-    Description: Header file for nodal analysis functionality.
+    Description: Implementation of nodal analysis functionality.
     Change Log:
         2026/10/10 - Initial commit (Jack Barnard)
    ====================================== */
@@ -19,12 +19,13 @@
 #include <stdexcept>
 
 namespace {
-constexpr double pivotTolerance = 1e-12;
+constexpr double kPivotTolerance = 1e-12;
 }
 
 NodalAnalysis::NodalAnalysis(const Circuit& circuit) : circuit(circuit) {}
 
 std::vector<double> NodalAnalysis::solve() {
+    // Build and solve the modified nodal-analysis system for DC operation.
     createSystem();
     addResistors();
     addVoltageSources();
@@ -47,7 +48,9 @@ void NodalAnalysis::createSystem() {
         }
     }
     const std::size_t total = nodeUnknowns + extraUnknowns;
-    if (total == 0) throw std::runtime_error("Cannot analyse an empty circuit.");
+    if (total == 0) {
+        throw std::runtime_error("Cannot analyse an empty circuit.");
+    }
     matrix.assign(total, std::vector<double>(total, 0.0));
     rightHandSide.assign(total, 0.0);
     nodeVoltages.assign(nodeUnknowns, 0.0); // Ground node 0 is not included.
@@ -74,7 +77,9 @@ void NodalAnalysis::addVoltageSources() {
     std::size_t sourceIndex = nodeVoltages.size();
     for (const auto& component : circuit.getComponents()) {
         const auto* source = dynamic_cast<const VoltageSource*>(component.get());
-        if (source == nullptr || source->getIsAC()) continue; // AC sources are inactive in DC analysis.
+        if (source == nullptr || source->getIsAC()) {
+            continue;
+        } // AC sources are inactive in DC analysis.
         const int positive = source->getNode1();
         const int negative = source->getNode2();
         if (positive != 0) matrix[positive - 1][sourceIndex] = matrix[sourceIndex][positive - 1] = 1.0;
@@ -97,7 +102,9 @@ void NodalAnalysis::handleInductors() {
     }
     for (const auto& component : circuit.getComponents()) {
         const auto* inductor = dynamic_cast<const Inductor*>(component.get());
-        if (inductor == nullptr) continue;
+        if (inductor == nullptr) {
+            continue;
+        }
         const int node1 = inductor->getNode1();
         const int node2 = inductor->getNode2();
         if (node1 != 0) matrix[node1 - 1][sourceIndex] = matrix[sourceIndex][node1 - 1] = 1.0;
@@ -113,7 +120,7 @@ void NodalAnalysis::solveSystem() {
         for (std::size_t row = column + 1; row < n; ++row) {
             if (std::abs(matrix[row][column]) > std::abs(matrix[pivot][column])) pivot = row;
         }
-        if (std::abs(matrix[pivot][column]) < pivotTolerance) {
+        if (std::abs(matrix[pivot][column]) < kPivotTolerance) {
             throw std::runtime_error("Circuit matrix is singular; check for floating nodes or conflicting ideal sources.");
         }
         std::swap(matrix[column], matrix[pivot]);

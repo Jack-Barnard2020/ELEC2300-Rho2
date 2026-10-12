@@ -1,46 +1,34 @@
-/* =========== ELEC2300 - Rho2 ==========
-    Project: Circuit Simulator
-    File: VoltageSource.hpp
-    Author: Jack Barnard
-    Date: 2026/10/10
-    Description: Header file for voltage source functionality.
-    Change Log:
-        2026/10/10 - Initial commit (Jack Barnard)
-   ====================================== */
-
 #pragma once
 
 #include "Component.hpp"
 
-class VoltageSource : public Component {
-private:
-    double frequency;
-    double phase;
-    bool isAC;
+#include <string>
 
+// Ideal DC or sinusoidal AC voltage source.
+class VoltageSource final : public Component {
 public:
-    // DC voltage source.
-    VoltageSource(
-        const std::string& name,
-        int positiveNode,
-        int negativeNode,
-        double voltage
-    );
+    // Constant DC source. Voltage is measured in volts.
+    VoltageSource(const std::string& name, int positiveNode, int negativeNode, double voltage);
 
-    // Sinusoidal AC voltage source.
+    // Sinusoidal source. Amplitude is peak volts, frequency is hertz,
+    // and phase is radians.
     VoltageSource(
         const std::string& name,
         int positiveNode,
         int negativeNode,
         double amplitude,
-        double frequency, // in Hertz
-        double phase // in radians
+        double frequency,
+        double phase
     );
 
-    double getVoltage(double time = 0.0) const;
-    double getFrequency() const;
-    double getPhase() const;
-    bool getIsAC() const;
+    [[nodiscard]] double getVoltage(double time = 0.0) const;
+    [[nodiscard]] double getFrequency() const;
+    [[nodiscard]] double getPhase() const;
+    [[nodiscard]] bool getIsAC() const;
+    [[nodiscard]] std::string getType() const override;
 
-    std::string getType() const override;
+private:
+    double frequency;
+    double phase;
+    bool isAC;
 };

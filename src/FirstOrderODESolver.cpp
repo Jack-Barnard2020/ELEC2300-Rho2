@@ -1,9 +1,9 @@
-/* =========== ELEC2300 -*Rho2 ==========
+/* =========== ELEC2300 Rho2 ==========
     Project: Circu*t Simulator
     File: FirstOrderOD*Solver.hpp
-    Author: Jack Barnar*
+    Author: Jack Barnard
     Date: 2026/10/10
-    Descript*on: Header file for first-order OD* solver functionality.
+    Descript*on: Header file for first-order ODE solver functionality.
     Change Log:
         2026/10/10 - Initial commit (Jack Barnard)
    ====================================== */
