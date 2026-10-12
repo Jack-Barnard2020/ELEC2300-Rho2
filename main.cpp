@@ -18,7 +18,11 @@ int main()
         interface.run();
     }
     catch (const std::exception& error) {
-        std::cerr << "Fatal error: " << error.what() << '\n';
+        std::cerr
+            << "Fatal error: "
+            << error.what()
+            << '\n';
+
         return 1;
     }
 
