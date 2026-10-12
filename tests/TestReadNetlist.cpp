@@ -43,13 +43,13 @@ int main() {
         }
 
         // Basic automatic checks.
-        if (circuit.getNumberOfComponents() != 3) {
+        if (circuit.getNumberOfComponents() != 4) {
             std::cerr << "FAIL: Expected 3 components.\n";
             return 1;
         }
 
-        if (circuit.getHighestNode() != 2) {
-            std::cerr << "FAIL: Expected highest node to be 2.\n";
+        if (circuit.getHighestNode() != 3) {
+            std::cerr << "FAIL: Expected highest node to be 3.\n";
             return 1;
         }
 
@@ -65,6 +65,11 @@ int main() {
 
         if (circuit.getComponentByName("C1") == nullptr) {
             std::cerr << "FAIL: Could not find C1.\n";
+            return 1;
+        }
+
+        if (circuit.getComponentByName("R2") == nullptr) {
+            std::cerr << "FAIL: Could not find R2.\n";
             return 1;
         }
 
