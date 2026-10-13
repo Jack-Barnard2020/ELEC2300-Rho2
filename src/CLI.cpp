@@ -15,6 +15,7 @@
 #include "FirstOrderODESolver.hpp"
 #include "Resistor.hpp"
 #include "Capacitor.hpp"
+#include "Plotter.hpp"
 
 #include <exception>
 #include <iomanip>
@@ -436,7 +437,8 @@ void CLI::runDCAnalysis() {
     waitForEnter();
 }
 
-void CLI::runTransientAnalysis() {
+void CLI::runTransientAnalysis()
+{
     showHeader("Transient Analysis");
 
     if (!circuit.has_value()) {
@@ -449,50 +451,342 @@ void CLI::runTransientAnalysis() {
         return;
     }
 
-    const auto& components = circuit->getComponents();
-    
+    // -----------------------------------------------------
+    // Find the components required for a simple RC circuit.
+    // -----------------------------------------------------
+
     const Resistor* resistor = nullptr;
     const Capacitor* capacitor = nullptr;
     const VoltageSource* source = nullptr;
 
-    for (const auto& componentPtr : components) {
+    int resistorCount = 0;
+    int capacitorCount = 0;
+    int dcSourceCount = 0;
 
+    for (const auto& componentPtr : circuit->getComponents()) {
         const Component* component = componentPtr.get();
 
-        if (const auto* r = dynamic_cast<const Resistor*>(component)) {
+        if (const auto* r =
+                dynamic_cast<const Resistor*>(component)) {
+
             resistor = r;
+            ++resistorCount;
         }
-        else if (const auto* c = dynamic_cast<const Capacitor*>(component)) {
+        else if (const auto* c =
+                     dynamic_cast<const Capacitor*>(component)) {
+
             capacitor = c;
+            ++capacitorCount;
         }
-        else if (const auto* v = dynamic_cast<const VoltageSource*>(component)) {
-            source = v;
+        else if (const auto* v =
+                     dynamic_cast<const VoltageSource*>(component)) {
+
+            // For now a frequency of zero is treated as a DC source.
+            if (v->getFrequency() == 0.0) {
+                source = v;
+                ++dcSourceCount;
+            }
         }
     }
 
-    if (resistor == nullptr || capacitor == nullptr || source == nullptr) {
+    // -----------------------------------------------------
+    // Validate the circuit.
+    // -----------------------------------------------------
+
+    if (resistorCount != 1 ||
+        capacitorCount != 1 ||
+        dcSourceCount != 1) {
+
         std::cout
             << RED
-            << "Transient analysis currently requres:\n"
-            << "     - One resistor\n"
-            << "     - One capacitor\n"
-            << "     - One voltage source\n"
+            << "Transient analysis currently supports a simple "
+            << "first-order RC circuit.\n\n"
+            << RESET
+            << "The circuit must contain exactly:\n"
+            << "  - one resistor\n"
+            << "  - one capacitor\n"
+            << "  - one DC voltage source\n\n"
+            << "Detected:\n"
+            << "  Resistors:          " << resistorCount << '\n'
+            << "  Capacitors:         " << capacitorCount << '\n'
+            << "  DC voltage sources: " << dcSourceCount << '\n';
+
+        waitForEnter();
+        return;
+    }
+
+    if (resistor == nullptr ||
+        capacitor == nullptr ||
+        source == nullptr) {
+
+        std::cout
+            << RED
+            << "The RC components could not be identified.\n"
             << RESET;
 
         waitForEnter();
         return;
     }
 
-    const double R = resistor->getResistance();
+    // -----------------------------------------------------
+    // Extract circuit parameters.
+    // -----------------------------------------------------
+
+    const double R = resistor->getValue();
     const double C = capacitor->getValue();
-    const double V0 = source->getVoltage();
+    const double Vs = source->getValue();
+
+    if (R <= 0.0 || C <= 0.0) {
+        std::cout
+            << RED
+            << "Resistance and capacitance must be greater than zero.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
+    const double timeConstant = R * C;
 
     std::cout
-        << "RC circuit detected.\n\n"
-        << "Resistance:    " << R << " ohms\n"
-        << "Capacitance:   " << C << " F\n"
-        << "Source:        " << V0 << " V\n"
-        << "Time constant: " << R * C << " s\n\n";
+        << GREEN
+        << "Simple RC circuit detected.\n"
+        << RESET
+        << '\n'
+        << "Resistance:     " << R << " ohms\n"
+        << "Capacitance:    " << C << " F\n"
+        << "Source voltage: " << Vs << " V\n"
+        << "Time constant:  " << timeConstant << " s\n\n";
+
+    // -----------------------------------------------------
+    // Ask the user for simulation parameters.
+    // -----------------------------------------------------
+
+    double initialVoltage = 0.0;
+    double stopTime = 0.0;
+    double timeStep = 0.0;
+
+    std::cout << "Initial capacitor voltage (V): ";
+
+    if (!(std::cin >> initialVoltage)) {
+        std::cin.clear();
+
+        std::cin.ignore(
+            std::numeric_limits<std::streamsize>::max(),
+            '\n'
+        );
+
+        std::cout
+            << RED
+            << "\nInvalid initial voltage.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
+    std::cout << "Simulation stop time (s): ";
+
+    if (!(std::cin >> stopTime)) {
+        std::cin.clear();
+
+        std::cin.ignore(
+            std::numeric_limits<std::streamsize>::max(),
+            '\n'
+        );
+
+        std::cout
+            << RED
+            << "\nInvalid stop time.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
+    std::cout << "Simulation time step (s): ";
+
+    if (!(std::cin >> timeStep)) {
+        std::cin.clear();
+
+        std::cin.ignore(
+            std::numeric_limits<std::streamsize>::max(),
+            '\n'
+        );
+
+        std::cout
+            << RED
+            << "\nInvalid time step.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
+    // Remove the newline left by operator >>.
+    std::cin.ignore(
+        std::numeric_limits<std::streamsize>::max(),
+        '\n'
+    );
+
+    // -----------------------------------------------------
+    // Validate simulation parameters.
+    // -----------------------------------------------------
+
+    if (stopTime <= 0.0) {
+        std::cout
+            << RED
+            << "\nStop time must be greater than zero.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
+    if (timeStep <= 0.0) {
+        std::cout
+            << RED
+            << "\nTime step must be greater than zero.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
+    if (timeStep > stopTime) {
+        std::cout
+            << RED
+            << "\nTime step cannot be greater than stop time.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
+    // -----------------------------------------------------
+    // Define the first-order RC differential equation.
+    //
+    //              Vs - Vc
+    //     dVc/dt = ---------
+    //                 R C
+    //
+    // The ODE solver interprets:
+    //
+    //     x = time
+    //     y = capacitor voltage
+    //
+    // -----------------------------------------------------
+
+    auto rcEquation =
+        [R, C, Vs](double time, double capacitorVoltage) {
+        return (Vs - capacitorVoltage) / (R * C);
+    };
+
+    // -----------------------------------------------------
+    // Run the existing first-order ODE solver.
+    // -----------------------------------------------------
+
+    try {
+        showHeader("Running Transient Analysis");
+
+        std::cout
+            << "Solving RC differential equation...\n\n"
+            << "Initial voltage: " << initialVoltage << " V\n"
+            << "Stop time:       " << stopTime << " s\n"
+            << "Time step:       " << timeStep << " s\n\n"
+            << std::flush;
+
+        FirstOrderODESolver solver;
+
+        solver.solveEuler(
+            rcEquation,
+            0.0,               // Initial time
+            initialVoltage,    // Initial capacitor voltage
+            timeStep,          // Euler step
+            stopTime           // Final time
+        );
+
+        // -------------------------------------------------
+        // Retrieve the solver output.
+        // -------------------------------------------------
+
+        const auto& timeValues = solver.getXValues();
+        const auto& voltageValues = solver.getYValues();
+
+        if (timeValues.empty() || voltageValues.empty()) {
+            throw std::runtime_error(
+                "The ODE solver returned no simulation data."
+            );
+        }
+
+        if (timeValues.size() != voltageValues.size()) {
+            throw std::runtime_error(
+                "The transient X and Y vectors have different sizes."
+            );
+        }
+
+        // -------------------------------------------------
+        // Create the plot data series.
+        // -------------------------------------------------
+
+        Series capacitorSeries;
+
+        capacitorSeries.name = "Capacitor Voltage";
+        capacitorSeries.y = voltageValues;
+        capacitorSeries.symbol = '*';
+        capacitorSeries.color = PlotColor::Cyan;
+
+        std::vector<Series> series = {
+            capacitorSeries
+        };
+
+        // -------------------------------------------------
+        // Create the terminal plot.
+        // -------------------------------------------------
+
+        Plot plot(
+            60,     // Plot width
+            "s",    // X-axis units
+            "V"     // Y-axis units
+        );
+
+        // -------------------------------------------------
+        // Display the result.
+        // -------------------------------------------------
+
+        showHeader("Transient Analysis Results");
+
+        std::cout
+            << GREEN
+            << "Transient analysis completed successfully.\n"
+            << RESET
+            << '\n'
+            << "Circuit parameters\n"
+            << "------------------------------------------------------------\n"
+            << "R:                 " << R << " ohms\n"
+            << "C:                 " << C << " F\n"
+            << "Source voltage:    " << Vs << " V\n"
+            << "Time constant:     " << timeConstant << " s\n"
+            << "Initial voltage:   " << initialVoltage << " V\n"
+            << "Simulation length: " << stopTime << " s\n"
+            << "Time step:         " << timeStep << " s\n"
+            << "Calculated points: " << timeValues.size() << "\n\n";
+
+        std::cout << plot.plot(
+            timeValues,
+            series
+        );
+    }
+    catch (const std::exception& error) {
+        showHeader("Transient Analysis Error");
+
+        std::cout
+            << RED
+            << "Transient analysis failed.\n\n"
+            << RESET
+            << error.what()
+            << '\n';
+    }
 
     waitForEnter();
 }
