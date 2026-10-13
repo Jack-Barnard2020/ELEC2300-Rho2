@@ -21,6 +21,7 @@ private:
     // Analysis
     void analysisMenu();
     void runDCAnalysis();
+    void runTransientAnalysis();
 
     // General input
     void waitForEnter() const;

@@ -12,6 +12,9 @@
 #include "ReadNetlist.hpp"
 #include "VoltageSource.hpp"
 #include "NodalAnalysis.hpp"
+#include "FirstOrderODESolver.hpp"
+#include "Resistor.hpp"
+#include "Capacitor.hpp"
 
 #include <exception>
 #include <iomanip>
@@ -336,14 +339,7 @@ void CLI::analysisMenu()
             runDCAnalysis();
         }
         else if (choice == "2") {
-            showHeader("Transient Analysis");
-
-            std::cout
-                << YELLOW
-                << "COMING SOON\n"
-                << RESET;
-
-            waitForEnter();
+            runTransientAnalysis();
         }
         else if (choice == "3") {
             analysisRunning = false;
@@ -436,6 +432,67 @@ void CLI::runDCAnalysis() {
             << error.what()
             << '\n';
     }
+
+    waitForEnter();
+}
+
+void CLI::runTransientAnalysis() {
+    showHeader("Transient Analysis");
+
+    if (!circuit.has_value()) {
+        std::cout
+            << RED
+            << "No circuit is currently loaded.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
+    const auto& components = circuit->getComponents();
+    
+    const Resistor* resistor = nullptr;
+    const Capacitor* capacitor = nullptr;
+    const VoltageSource* source = nullptr;
+
+    for (const auto& componentPtr : components) {
+
+        const Component* component = componentPtr.get();
+
+        if (const auto* r = dynamic_cast<const Resistor*>(component)) {
+            resistor = r;
+        }
+        else if (const auto* c = dynamic_cast<const Capacitor*>(component)) {
+            capacitor = c;
+        }
+        else if (const auto* v = dynamic_cast<const VoltageSource*>(component)) {
+            source = v;
+        }
+    }
+
+    if (resistor == nullptr || capacitor == nullptr || source == nullptr) {
+        std::cout
+            << RED
+            << "Transient analysis currently requres:\n"
+            << "     - One resistor\n"
+            << "     - One capacitor\n"
+            << "     - One voltage source\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
+    const double R = resistor->getResistance();
+    const double C = capacitor->getValue();
+    const double V0 = source->getVoltage();
+
+    std::cout
+        << "RC circuit detected.\n\n"
+        << "Resistance:    " << R << " ohms\n"
+        << "Capacitance:   " << C << " F\n"
+        << "Source:        " << V0 << " V\n"
+        << "Time constant: " << R * C << " s\n\n";
 
     waitForEnter();
 }
