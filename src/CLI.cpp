@@ -729,15 +729,24 @@ void CLI::runTransientAnalysis()
         // Create the plot data series.
         // -------------------------------------------------
 
-        Series capacitorSeries;
+        Series capacitorSeries, resistorSeries;
 
         capacitorSeries.name = "Capacitor Voltage";
         capacitorSeries.y = voltageValues;
-        capacitorSeries.symbol = '*';
+        capacitorSeries.symbol = 'C';
         capacitorSeries.color = PlotColor::Cyan;
 
+        resistorSeries.name = "Resistor Voltage";
+        resistorSeries.symbol = 'R';
+        resistorSeries.color = PlotColor::Magenta;
+        // Calculate the resistor voltage as Vs - Vc.
+        resistorSeries.y.reserve(voltageValues.size());
+        for (const auto& vc : voltageValues) {
+            resistorSeries.y.push_back(Vs - vc);
+        }
+
         std::vector<Series> series = {
-            capacitorSeries
+            capacitorSeries, resistorSeries
         };
 
         // -------------------------------------------------
@@ -745,7 +754,7 @@ void CLI::runTransientAnalysis()
         // -------------------------------------------------
 
         Plot plot(
-            60,     // Plot width
+            100,     // Plot width
             "s",    // X-axis units
             "V"     // Y-axis units
         );
