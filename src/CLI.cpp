@@ -6,6 +6,7 @@
     Description: Implementation file for the command-line interface.
     Change Log:
         2026/10/12 - Initial commit (Jack Barnard)
+        2026/10/13 - Added transient analysis functionality and plotting (Jack Barnard)
    ====================================== */
 
 #include "CLI.hpp"
