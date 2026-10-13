@@ -6,6 +6,7 @@
     Description: Implementation file for voltage source functionality.
     Change Log:
         2026/10/10 - Initial commit (Jack Barnard)
+        2026/10/13 - Fixed header comment
    ====================================== */
 
 #include "VoltageSource.hpp"
