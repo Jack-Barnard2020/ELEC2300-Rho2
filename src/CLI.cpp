@@ -22,6 +22,8 @@
 #include <iostream>
 #include <string>
 #include <utility>
+#include <limits>
+#include <stdexcept>
 
 namespace {
 
@@ -633,6 +635,26 @@ void CLI::runTransientAnalysis()
     // Validate simulation parameters.
     // -----------------------------------------------------
 
+    if (stopTime == std::numeric_limits<double>::infinity()) {
+        std::cout
+            << RED
+            << "\nStop time cannot be infinity.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
+    if (stopTime == std::numeric_limits<double>::quiet_NaN()) {
+        std::cout
+            << RED
+            << "\nStop time cannot be NaN.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
     if (stopTime <= 0.0) {
         std::cout
             << RED
@@ -653,6 +675,26 @@ void CLI::runTransientAnalysis()
         return;
     }
 
+    if (timeStep == std::numeric_limits<double>::infinity()) {
+        std::cout
+            << RED
+            << "\nTime step cannot be infinity.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+
+    if (timeStep == std::numeric_limits<double>::quiet_NaN()) {
+        std::cout
+            << RED
+            << "\nTime step cannot be NaN.\n"
+            << RESET;
+
+        waitForEnter();
+        return;
+    }
+    
     if (timeStep > stopTime) {
         std::cout
             << RED
