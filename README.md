@@ -1,600 +1,143 @@
-# ELEC2300 Circuit Simulator
+# Rho2 Circuit Simulator
 
-A C++ circuit simulation project developed for ELEC2300 / Rho 2.
+A command-line circuit simulator written in C++ for the ELEC2300 Rho2 project.
 
-The project provides a set of classes for representing electrical components and circuits, reading circuits from netlist files, performing DC nodal analysis, generating numerical data, and displaying results in the terminal.
+The program reads a circuit from a netlist, displays the loaded components, and provides analysis tools from an interactive terminal menu.
 
-## Overview
+## Using the simulator
 
-The simulator is organised around an object-oriented component model.
+1. Run the compiled circuit simulator from a terminal.
+2. At the main menu, select the option to load a netlist.
+3. Enter the path or filename of the netlist when prompted.
+4. Check the component list to make sure the circuit has been read correctly.
+5. Open the analysis menu and select the required analysis.
+6. Follow the prompts for any additional simulation values.
+7. Return to the menu to run another analysis or quit the program.
 
-Electrical components share a common `Component` base class. Individual component types such as resistors, capacitors, inductors and voltage sources implement the behaviour specific to that component.
+The interface is menu driven, so the available commands and required values are shown in the terminal as they are needed.
 
-A `Circuit` object owns the components that form a circuit. Circuits can either be constructed programmatically or populated from a text netlist using `ReadNetlist`.
+## Circuit netlists
 
-The current implementation contains support for:
+Circuit descriptions are supplied to the simulator using a text netlist. Each component entry describes the component name, the nodes it is connected between, and the component value or source parameters.
 
-- Resistors
-- Capacitors
-- Inductors
-- DC voltage sources
-- Sinusoidal AC voltage sources
-- Netlist parsing
-- Engineering suffixes such as `k`, `m`, `u`, `n` and `p`
-- DC modified nodal analysis
-- First-order ODE solving using Euler's method
-- Fourier-series waveform generation
-- Terminal-based plotting of one or more data series
+Use node `0` as the ground/reference node.
 
----
+A simple RC circuit, for example, should contain:
 
-## Project Structure
+- one voltage source;
+- one resistor;
+- one capacitor;
+- a ground/reference connection at node `0`.
 
-The implementation is split into a number of modules.
+Keep component names unique within the netlist. If the simulator rejects a netlist, check the component names, node numbers, values and source definition before running the analysis again.
 
-### `Component`
+## Analysis modes
 
-`Component` is the common base representation for a two-terminal circuit component.
+### DC operating point
 
-Each component stores:
+The DC analysis calculates the circuit's node voltages using nodal analysis.
 
-- a component name
-- node 1
-- node 2
-- a numeric component value
+Use this mode when you want the steady-state DC operating point of the loaded circuit.
 
-The constructor performs common validation:
+### Transient analysis
 
-- component names cannot be empty
-- node numbers cannot be negative
-- the two terminals cannot connect to the same node
+Transient analysis simulates how a simple first-order RC circuit changes with time. The simulator uses a first-order ODE solver and displays the calculated response as a terminal graph.
 
-Node `0` represents ground.
+For an RC charging simulation, you will be asked for simulation settings such as the initial capacitor voltage, stop time and time step.
 
-### `Resistor`
+A smaller time step normally gives a finer representation of the response, but also creates more simulation points.
 
-Represents an ideal resistor.
+### Bang-bang controller simulation
 
-The class provides:
+The bang-bang controller simulation adds feedback to a simple RC transient simulation.
 
-- resistance
-- conductance
-- current for a supplied voltage
-- component type information
+The controller has two output states:
 
-The resistor follows Ohm's law:
+- maximum output when the capacitor voltage is below the target voltage;
+- minimum output when the capacitor voltage is at or above the target voltage.
 
-    I = V / R
+For example, with a target of `3 V` and an output range of `0 V` to `5 V`, the supply switches between the two limits as the simulated capacitor voltage moves around the target.
 
-and conductance is calculated as:
+For this mode, load a simple first-order RC circuit containing one resistor, one capacitor and one DC voltage source. The program then asks for the controller target and transient simulation settings.
 
-    G = 1 / R
+The results plot shows the simulated capacitor voltage together with the target voltage so that the controller behaviour can be seen directly.
 
-Resistance must be greater than zero.
+## Choosing a time step
 
-### `Capacitor`
+The time step must be greater than zero and should be smaller than the total simulation time.
 
-Represents an ideal capacitor.
+For RC simulations, compare the chosen time step with the circuit time constant:
 
-The capacitor current can be calculated from the rate of change of voltage:
+```text
+tau = R * C
+```
 
-    I = C * dV/dt
+If the graph looks very coarse or the switching behaviour is difficult to see, reduce the time step and run the simulation again.
 
-Capacitance must be greater than zero.
+## Example workflow
 
-For DC steady-state nodal analysis, capacitors are treated as open circuits.
+A typical controlled RC simulation is:
 
-### `Inductor`
+```text
+Start simulator
+    |
+Load RC netlist
+    |
+Check component list
+    |
+Open Analysis Menu
+    |
+Select Bang-Bang Controller Simulation
+    |
+Enter target voltage
+    |
+Enter initial capacitor voltage
+    |
+Enter stop time and time step
+    |
+View plotted capacitor response
+```
 
-Represents an ideal inductor.
+For a `5 V` source and `3 V` target, a test configuration could use:
 
-The voltage across the inductor can be calculated using:
+```text
+Target voltage:             3.0 V
+Initial capacitor voltage:  0.0 V
+```
 
-    V = L * dI/dt
+Choose the stop time and time step according to the `R * C` time constant of the circuit you loaded.
 
-Inductance must be greater than zero.
+## Troubleshooting
 
-For DC steady-state nodal analysis, inductors are treated as short circuits.
+### Netlist will not load
 
-### `VoltageSource`
+Check that:
 
-Represents either a DC or sinusoidal AC voltage source.
+- the filename/path is correct;
+- the file is a plain-text netlist;
+- component names are unique;
+- node numbers are valid;
+- component values are valid numbers;
+- the circuit includes node `0` where a ground/reference node is required.
 
-Two forms are supported:
+### Transient simulation is rejected
 
-    VoltageSource(name, positiveNode, negativeNode, voltage)
+The current transient/controller simulation is intended for a simple first-order RC circuit. Check that the circuit contains the components required by the selected analysis.
 
-and:
+### Controller target is rejected
 
-    VoltageSource(
-        name,
-        positiveNode,
-        negativeNode,
-        amplitude,
-        frequency,
-        phase
-    )
+The target voltage must lie within the controller's minimum and maximum output range. With a `0 V` to `5 V` controller, for example, the target must lie within that range.
 
-A DC source returns a constant voltage.
+### Graph looks inaccurate or too coarse
 
-An AC source is evaluated as:
+Reduce the simulation time step. The Euler method advances the solution one discrete step at a time, so the chosen step size affects the numerical resolution of the plotted response.
 
-    V(t) = amplitude * sin(2*pi*frequency*t + phase)
+### Terminal formatting looks wrong
 
-Frequency cannot be negative.
+The CLI uses terminal formatting for menus and results. Use a terminal that supports ANSI escape sequences if colour or screen clearing does not display correctly.
 
-Phase is specified in radians.
+## Project structure
 
-AC voltage sources are not stamped into the current DC nodal-analysis system.
+The simulator separates circuit representation, components, analysis and user-interface code into different classes. The main source files include implementations for components such as resistors, capacitors, inductors and voltage sources, alongside netlist reading, nodal analysis, ODE solving, plotting, the controller and the CLI.
 
-### `Circuit`
-
-`Circuit` is the container for all components in a circuit.
-
-Components are stored using `std::unique_ptr<Component>`, meaning ownership of a component is transferred to the circuit when it is added.
-
-The class provides functionality to:
-
-- add a component
-- retrieve all components
-- find a component by name
-- obtain the number of components
-- determine the highest numbered node
-
-Component names must be unique within a circuit.
-
-Attempting to add a null component or a second component with an existing name throws `std::invalid_argument`.
-
-### `ReadNetlist`
-
-`ReadNetlist` converts a text-based netlist into a `Circuit`.
-
-It:
-
-1. opens the requested file
-2. reads it one line at a time
-3. removes comments
-4. tokenises each remaining line
-5. validates the fields
-6. creates the appropriate component
-7. adds the component to the circuit
-
-Blank lines and comment-only lines are ignored.
-
-Comments begin with:
-
-    #
-
-### `NodalAnalysis`
-
-`NodalAnalysis` performs DC modified nodal analysis on a `Circuit`.
-
-The solver:
-
-1. creates the system matrix
-2. stamps resistor conductances
-3. adds DC voltage sources
-4. treats capacitors as DC open circuits
-5. treats inductors as DC short circuits
-6. solves the resulting linear system
-7. returns the calculated non-ground node voltages
-
-The linear system is solved using Gaussian elimination with pivot selection.
-
-If the matrix is singular, for example because of a floating node or incompatible ideal-source configuration, the solver throws a runtime error.
-
-Ground node `0` is not included in the returned node-voltage vector.
-
-### `FirstOrderODESolver`
-
-Provides a first-order numerical ODE solver using Euler's method.
-
-`solveEuler()` accepts:
-
-- a derivative function
-- initial X value
-- initial Y value
-- step size
-- final X value
-
-The resulting X and Y samples can then be retrieved using the corresponding getter functions.
-
-The solver validates that:
-
-- the derivative function is valid
-- the step size is greater than zero
-- the final X value is not less than the initial X value
-
-If the requested interval is not an exact multiple of the step size, the final step is reduced so that the final sample occurs at `finalX`.
-
-### `FourierSeries`
-
-Generates a sampled waveform from sine and cosine Fourier coefficients.
-
-The class stores:
-
-- sine coefficients
-- cosine coefficients
-- fundamental frequency
-- sample time step
-- total run time
-
-Each harmonic uses a multiple of the fundamental frequency.
-
-Calling `generate()` replaces any previously generated samples.
-
-The generated samples are available through `getXValues()` and `getYValues()`.
-
-### `Plotter`
-
-Provides terminal-based visualisation of numerical data.
-
-A plot is created from:
-
-- an X vector
-- one or more data series
-- X-axis units
-- Y-axis units
-- a terminal plot width
-
-Multiple series can be displayed using different symbols and ANSI terminal colours.
-
-All plotted Y series must contain the same number of samples as the X vector.
-
----
-
-## Netlist Format
-
-A circuit can be described using a plain-text netlist.
-
-Each component occupies one line.
-
-The general passive/DC format is:
-
-    name node1 node2 type value
-
-Supported component identifiers are:
-
-| Identifier | Component |
-|------------|-----------|
-| `R` | Resistor |
-| `C` | Capacitor |
-| `L` | Inductor |
-| `VDC` | DC voltage source |
-| `VAC` | AC voltage source |
-
-### Examples
-
-A resistor:
-
-    R1 1 0 R 1k
-
-A capacitor:
-
-    C1 1 0 C 100u
-
-An inductor:
-
-    L1 1 2 L 10m
-
-A DC voltage source:
-
-    V1 1 0 VDC 5
-
-### AC voltage source
-
-AC voltage sources require two additional parameters:
-
-    name node1 node2 VAC amplitude frequency phase
-
-For example:
-
-    V1 1 0 VAC 5 50 0
-
-This defines the parameters required by the sinusoidal voltage-source model.
-
----
-
-## Engineering Suffixes
-
-The netlist parser supports engineering notation.
-
-| Suffix | Multiplier |
-|--------|------------|
-| `T` | 1e12 |
-| `G` | 1e9 |
-| `M` | 1e6 |
-| `k` | 1e3 |
-| `m` | 1e-3 |
-| `u` | 1e-6 |
-| `n` | 1e-9 |
-| `p` | 1e-12 |
-
-For example:
-
-    10k
-    47m
-    100u
-    220n
-
-Values without a suffix are also accepted.
-
-Suffixes are case-sensitive.
-
----
-
-## Example Netlist
-
-An example resistive DC circuit could be written as:
-
-    # Example voltage-divider circuit
-
-    V1 1 0 VDC 10
-    R1 1 2 R 1k
-    R2 2 0 R 1k
-
-Node `0` is ground.
-
-The remaining node numbers correspond to unknown node voltages calculated by `NodalAnalysis`.
-
----
-
-## Using the Classes
-
-### Reading a circuit
-
-A circuit can be created from a netlist using `ReadNetlist`:
-
-    ReadNetlist reader("circuit.txt");
-    Circuit circuit = reader.read();
-
-If the file cannot be opened, contains invalid data, or does not contain any components, an exception is thrown.
-
-### Building a circuit directly
-
-Components can also be constructed in C++ and added to a circuit.
-
-For example:
-
-    Circuit circuit;
-
-    circuit.addComponent(
-        std::make_unique<VoltageSource>("V1", 1, 0, 10.0)
-    );
-
-    circuit.addComponent(
-        std::make_unique<Resistor>("R1", 1, 2, 1000.0)
-    );
-
-    circuit.addComponent(
-        std::make_unique<Resistor>("R2", 2, 0, 1000.0)
-    );
-
-Because `Circuit` owns its components through `std::unique_ptr`, ownership is transferred when the component is added.
-
-### Running DC analysis
-
-Given a populated `Circuit`:
-
-    NodalAnalysis analysis(circuit);
-
-    std::vector<double> nodeVoltages = analysis.solve();
-
-The returned vector contains voltages for the non-ground nodes.
-
-Because node `0` is excluded, the result at vector index `0` corresponds to circuit node `1`, index `1` corresponds to circuit node `2`, and so on.
-
----
-
-## Numerical Utilities
-
-The circuit classes are accompanied by general numerical utilities that can be used for waveform and transient-related calculations.
-
-### Euler ODE solver
-
-A first-order differential equation can be numerically sampled with `FirstOrderODESolver`.
-
-Conceptually:
-
-    dy/dx = f(x, y)
-
-is advanced using Euler's method:
-
-    y_next = y + h * f(x, y)
-
-where `h` is the step size.
-
-After solving, use:
-
-    getXValues()
-    getYValues()
-
-to access the generated samples.
-
-### Fourier series
-
-`FourierSeries` generates time-domain values by combining sine and cosine harmonics.
-
-After constructing the series:
-
-    series.generate();
-
-the generated samples are available from:
-
-    series.getXValues();
-    series.getYValues();
-
----
-
-## Plotting Data
-
-`Plotter` converts numerical sample vectors into a text representation suitable for displaying in a terminal.
-
-Each `Series` contains its:
-
-- name
-- Y values
-- plotting symbol
-- colour
-
-All series share the same X axis.
-
-The plotter automatically determines the minimum and maximum Y values across the supplied data and maps those values onto the requested terminal width.
-
-It also displays:
-
-- a legend
-- X values
-- the graphical row
-- numeric Y values
-- the overall Y range
-
-ANSI escape sequences are used for coloured output.
-
----
-
-## Error Handling
-
-The project uses standard C++ exceptions for invalid circuit definitions and invalid numerical parameters.
-
-Examples of invalid input include:
-
-- empty component names
-- negative node numbers
-- connecting both terminals of a component to the same node
-- zero or negative resistance
-- zero or negative capacitance
-- zero or negative inductance
-- negative AC frequency
-- duplicate component names
-- null components
-- malformed netlist lines
-- unknown netlist component types
-- invalid engineering suffixes
-- empty netlists
-- invalid ODE solver parameters
-- singular DC-analysis matrices
-
-Code using the simulator should therefore handle exceptions where appropriate, for example:
-
-    try {
-        ReadNetlist reader("circuit.txt");
-        Circuit circuit = reader.read();
-
-        NodalAnalysis analysis(circuit);
-        const auto voltages = analysis.solve();
-
-    } catch (const std::exception& error) {
-        std::cerr << "Error: " << error.what() << '\n';
-    }
-
----
-
-## Building the Project
-
-The implementation files expect corresponding header files such as:
-
-    Component.hpp
-    Resistor.hpp
-    Capacitor.hpp
-    Inductor.hpp
-    VoltageSource.hpp
-    Circuit.hpp
-    ReadNetlist.hpp
-    NodalAnalysis.hpp
-    FirstOrderODESolver.hpp
-    FourierSeries.hpp
-    Plotter.hpp
-
-The source files should be compiled together with the program entry point (`main.cpp` or equivalent).
-
-A compiler supporting the C++ standard required by the project should be used.
-
-`FourierSeries.cpp` uses `std::numbers::pi`, so the project requires C++20 support unless that implementation is changed.
-
-For example, with GCC and all required `.cpp` files in the same directory:
-
-    g++ -std=c++20 *.cpp -o circuit_simulator
-
-The executable can then be run from the terminal.
-
-On Linux/macOS:
-
-    ./circuit_simulator
-
-The exact command-line arguments or interactive usage depend on the project's `main.cpp`, which is not documented here because it is not part of the current source set.
-
----
-
-## Current DC Analysis Behaviour
-
-It is important to distinguish the capabilities of the component classes from the current DC solver.
-
-During `NodalAnalysis`:
-
-- resistors are stamped using their conductance
-- DC voltage sources are included using additional modified-nodal-analysis unknowns
-- capacitors are treated as open circuits
-- inductors are treated as short circuits
-- AC voltage sources are skipped during DC analysis
-
-This means the presence of AC-source and time-domain utility classes does not mean that `NodalAnalysis::solve()` performs a full transient or AC-frequency-domain simulation.
-
----
-
-## Design Notes
-
-The project separates responsibilities between classes:
-
-- `Component` stores information common to circuit elements.
-- `Resistor`, `Capacitor`, `Inductor`, and `VoltageSource` implement component-specific behaviour.
-- `Circuit` manages component ownership and circuit topology metadata.
-- `ReadNetlist` handles file parsing.
-- `NodalAnalysis` handles DC circuit solving.
-- `FirstOrderODESolver` provides numerical integration support.
-- `FourierSeries` generates sampled periodic signals.
-- `Plotter` handles terminal presentation.
-
-This structure keeps electrical modelling, parsing, calculation, storage and output concerns separate, making the code easier to extend.
-
----
-
-## Extending the Simulator
-
-When adding another component type, a programmer should generally consider:
-
-1. how the component is represented in the class hierarchy
-2. what constructor validation it requires
-3. whether `ReadNetlist` needs a new component identifier
-4. how the component behaves under each supported type of analysis
-5. whether new matrix-stamping logic is required
-6. what tests are required for valid and invalid inputs
-
-When extending the analysis functionality, take care not to assume that the existing DC behaviour is also correct for transient or AC analysis.
-
----
-
-## Known Scope
-
-The current source code explicitly implements DC nodal analysis.
-
-Transient-related building blocks are present, including:
-
-- capacitor and inductor differential relationships
-- sinusoidal voltage generation
-- Euler ODE integration
-- Fourier-series generation
-- plotting
-
-However, the current `NodalAnalysis` implementation itself solves the DC system. A complete transient or AC circuit-analysis pipeline should not be assumed until it is explicitly implemented and tested.
-
----
-
-## Author
-
-Jack Barnard
-
-ELEC2300 / Rho 2  
-Circuit Simulator
-
-Initial implementation: October 2026
+This separation keeps the circuit model and numerical analysis independent from the command-line interface, making the simulator easier to extend with additional components and analysis methods.
