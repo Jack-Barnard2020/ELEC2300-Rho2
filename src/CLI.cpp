@@ -20,8 +20,10 @@
 #include "Resistor.hpp"
 #include "Capacitor.hpp"
 #include "Plotter.hpp"
+#include "Controller.hpp"
 
 // Include standard library headers.
+#include <cmath>
 #include <exception>
 #include <iomanip>
 #include <iostream>
@@ -30,6 +32,7 @@
 #include <limits>
 #include <stdexcept>
 
+#define SCREEN_WIDTH 120
 
 // Keep terminal formatting constants local to this translation unit.
 // An unnamed namespace was chosen instead of globals in CLI.hpp because these values are
@@ -360,8 +363,9 @@ void CLI::analysisMenu() {
             << "Choose the type of analysis to perform:\n\n"
             << "1. DC Operating Point (Nodal Analysis)\n"
             << "2. Transient Analysis\n"
-            << "3. Return to Main Menu\n"
-            << "4. Quit\n\n"
+            << "3. Bang-Bang Controller Simulation\n"
+            << "4. Return to Main Menu\n"
+            << "5. Quit\n\n"
             << "Select an option: ";
 
         std::string choice;
@@ -374,16 +378,19 @@ void CLI::analysisMenu() {
             runTransientAnalysis();
         }
         else if (choice == "3") {
-            analysisRunning = false;
+            runBangBangControllerSimulation();
         }
         else if (choice == "4") {
+            analysisRunning = false;
+        }
+        else if (choice == "5") {
             running = false;
             analysisRunning = false;
         }
         else {
             std::cout
                 << RED
-                << "\nInvalid option. Please enter 1, 2, 3 or 4.\n"
+                << "\nInvalid option. Please enter 1, 2, 3, 4 or 5.\n"
                 << RESET;
 
             waitForEnter();
@@ -461,6 +468,226 @@ void CLI::runDCAnalysis() {
         std::cout
             << RED
             << "DC analysis failed.\n\n"
+            << RESET
+            << error.what()
+            << '\n';
+    }
+
+    waitForEnter();
+}
+
+
+
+// Run the RC simulation with a bang-bang controller.
+void CLI::runBangBangControllerSimulation() {
+    showHeader("Bang-Bang Controller Simulation");
+
+    if (!circuit.has_value()) {
+        std::cout << RED << "No circuit is currently loaded.\n" << RESET;
+        waitForEnter();
+        return;
+    }
+
+    const Resistor* resistor = nullptr;
+    const Capacitor* capacitor = nullptr;
+    const VoltageSource* source = nullptr;
+    int resistorCount = 0;
+    int capacitorCount = 0;
+    int dcSourceCount = 0;
+
+    for (const auto& componentPtr : circuit->getComponents()) {
+        const Component* component = componentPtr.get();
+
+        if (const auto* r = dynamic_cast<const Resistor*>(component)) {
+            resistor = r;
+            ++resistorCount;
+        }
+        else if (const auto* c = dynamic_cast<const Capacitor*>(component)) {
+            capacitor = c;
+            ++capacitorCount;
+        }
+        else if (const auto* v = dynamic_cast<const VoltageSource*>(component)) {
+            if (!v->getIsAC()) {
+                source = v;
+                ++dcSourceCount;
+            }
+        }
+    }
+
+    if (resistorCount != 1 || capacitorCount != 1 || dcSourceCount != 1) {
+        std::cout
+            << RED
+            << "Bang-bang control currently supports a simple first-order RC circuit.\n\n"
+            << RESET
+            << "The circuit must contain exactly:\n"
+            << "  - one resistor\n"
+            << "  - one capacitor\n"
+            << "  - one DC voltage source\n\n"
+            << "Detected:\n"
+            << "  Resistors:          " << resistorCount << '\n'
+            << "  Capacitors:         " << capacitorCount << '\n'
+            << "  DC voltage sources: " << dcSourceCount << '\n';
+        waitForEnter();
+        return;
+    }
+
+    if (resistor == nullptr || capacitor == nullptr || source == nullptr) {
+        std::cout << RED << "The RC components could not be identified.\n" << RESET;
+        waitForEnter();
+        return;
+    }
+
+    const double R = resistor->getResistance();
+    const double C = capacitor->getCapacitance();
+    const double maximumOutputVoltage = source->getVoltage(0.0);
+    const double minimumOutputVoltage = 0.0;
+    const double timeConstant = R * C;
+
+    if (R <= 0.0 || C <= 0.0 || maximumOutputVoltage <= minimumOutputVoltage) {
+        std::cout << RED << "The RC circuit or source values are invalid.\n" << RESET;
+        waitForEnter();
+        return;
+    }
+
+    std::cout
+        << GREEN << "Simple RC circuit detected.\n" << RESET << '\n'
+        << "Resistance:             " << R << " ohms\n"
+        << "Capacitance:            " << C << " F\n"
+        << "Maximum output voltage: " << maximumOutputVoltage << " V\n"
+        << "Minimum output voltage: " << minimumOutputVoltage << " V\n"
+        << "Time constant:          " << timeConstant << " s\n\n";
+
+    double targetVoltage = 0.0;
+    double initialVoltage = 0.0;
+    double stopTime = 0.0;
+    double timeStep = 0.0;
+
+    auto readDouble = [](const char* prompt, double& value) {
+        std::cout << prompt;
+        if (std::cin >> value) {
+            return true;
+        }
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        return false;
+    };
+
+    if (!readDouble("Target voltage (V): ", targetVoltage) ||
+        !readDouble("Initial capacitor voltage (V): ", initialVoltage) ||
+        !readDouble("Simulation stop time (s): ", stopTime) ||
+        !readDouble("Simulation time step (s): ", timeStep)) {
+        std::cout << RED << "\nInvalid numeric input.\n" << RESET;
+        waitForEnter();
+        return;
+    }
+
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+    if (!std::isfinite(targetVoltage) ||
+        !std::isfinite(initialVoltage) ||
+        !std::isfinite(stopTime) ||
+        !std::isfinite(timeStep)) {
+        std::cout << RED << "\nSimulation values must be finite.\n" << RESET;
+        waitForEnter();
+        return;
+    }
+
+    if (targetVoltage < minimumOutputVoltage ||
+        targetVoltage > maximumOutputVoltage) {
+        std::cout
+            << RED
+            << "\nTarget voltage must be between "
+            << minimumOutputVoltage << " V and "
+            << maximumOutputVoltage << " V.\n"
+            << RESET;
+        waitForEnter();
+        return;
+    }
+
+    if (stopTime <= 0.0 || timeStep <= 0.0 || timeStep > stopTime) {
+        std::cout
+            << RED
+            << "\nStop time and time step must be positive, and the time step "
+            << "must not exceed the stop time.\n"
+            << RESET;
+        waitForEnter();
+        return;
+    }
+
+    try {
+        Controller controller(
+            targetVoltage,
+            maximumOutputVoltage,
+            minimumOutputVoltage
+        );
+
+        auto controlledRCEquation =
+            [R, C, &controller](double /*time*/, double capacitorVoltage) {
+                const double inputVoltage =
+                    controller.calculateOutput(capacitorVoltage);
+                return (inputVoltage - capacitorVoltage) / (R * C);
+            };
+
+        showHeader("Running Bang-Bang Controller Simulation");
+        std::cout << "Solving controlled RC differential equation...\n" << std::flush;
+
+        FirstOrderODESolver solver;
+        solver.solveEuler(
+            controlledRCEquation,
+            0.0,
+            initialVoltage,
+            timeStep,
+            stopTime
+        );
+
+        const auto& timeValues = solver.getXValues();
+        const auto& voltageValues = solver.getYValues();
+
+        if (timeValues.empty() || voltageValues.empty()) {
+            throw std::runtime_error("The ODE solver returned no simulation data.");
+        }
+        if (timeValues.size() != voltageValues.size()) {
+            throw std::runtime_error("The transient X and Y vectors have different sizes.");
+        }
+
+        Series capacitorSeries;
+        capacitorSeries.name = "Capacitor Voltage";
+        capacitorSeries.y = voltageValues;
+        capacitorSeries.symbol = 'C';
+        capacitorSeries.color = PlotColor::Cyan;
+
+        Series targetSeries;
+        targetSeries.name = "Target Voltage";
+        targetSeries.y.assign(voltageValues.size(), controller.getTargetVoltage());
+        targetSeries.symbol = 'T';
+        targetSeries.color = PlotColor::Green;
+
+        std::vector<Series> series = {capacitorSeries, targetSeries};
+        Plot plot(SCREEN_WIDTH, "s", "V");
+
+        showHeader("Bang-Bang Controller Results");
+        std::cout
+            << GREEN
+            << "Bang-bang controller simulation completed successfully.\n"
+            << RESET << '\n'
+            << "R:                 " << R << " ohms\n"
+            << "C:                 " << C << " F\n"
+            << "Target voltage:    " << controller.getTargetVoltage() << " V\n"
+            << "Maximum output:    " << controller.getMaximumOutputVoltage() << " V\n"
+            << "Minimum output:    " << controller.getMinimumOutputVoltage() << " V\n"
+            << "Time constant:     " << timeConstant << " s\n"
+            << "Initial voltage:   " << initialVoltage << " V\n"
+            << "Simulation length: " << stopTime << " s\n"
+            << "Time step:         " << timeStep << " s\n"
+            << "Calculated points: " << timeValues.size() << "\n\n";
+
+        std::cout << plot.plot(timeValues, series);
+    }
+    catch (const std::exception& error) {
+        showHeader("Bang-Bang Controller Error");
+        std::cout
+            << RED
+            << "Bang-bang controller simulation failed.\n\n"
             << RESET
             << error.what()
             << '\n';
@@ -850,7 +1077,7 @@ void CLI::runTransientAnalysis() {
         // A fixed width gives predictable terminal output. Automatically using the terminal
         // width would be more adaptive, but also needs platform-specific terminal-size handling.
         Plot plot(
-            100,     // Plot width
+            SCREEN_WIDTH,     // Plot width
             "s",    // X-axis units
             "V"     // Y-axis units
         );
