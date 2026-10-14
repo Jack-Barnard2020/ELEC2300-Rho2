@@ -7,8 +7,11 @@
     Change Log:
         2026/10/12 - Initial commit (Jack Barnard)
         2026/10/13 - Added transient analysis functionality and plotting (Jack Barnard)
+        2026/10/13 - Improved commenting (Jack Barnard)
+        2026/10/14 - Finished explanatory comments and documented design choices (Jack Barnard)
    ====================================== */
 
+// Include the header files written for this project.
 #include "CLI.hpp"
 #include "ReadNetlist.hpp"
 #include "VoltageSource.hpp"
@@ -18,6 +21,7 @@
 #include "Capacitor.hpp"
 #include "Plotter.hpp"
 
+// Include standard library headers.
 #include <exception>
 #include <iomanip>
 #include <iostream>
@@ -26,6 +30,10 @@
 #include <limits>
 #include <stdexcept>
 
+
+// Keep terminal formatting constants local to this translation unit.
+// An unnamed namespace was chosen instead of globals in CLI.hpp because these values are
+// only an implementation detail of the CLI and do not need to be visible to other files.
 namespace {
 
 constexpr const char* RESET  = "\033[0m";
@@ -34,12 +42,16 @@ constexpr const char* CYAN   = "\033[36m";
 constexpr const char* GREEN  = "\033[32m";
 constexpr const char* RED    = "\033[31m";
 constexpr const char* YELLOW = "\033[33m";
+constexpr const char* CLEAR_SCREEN = "\033[2J";
+constexpr const char* CURSOR_HOME  = "\033[H";
 
-} // namespace
+} 
 
 
-void CLI::run()
-{
+// Main entry point for the command-line interface.
+// Menu choices are read with getline rather than `cin >> choice`. This keeps menu input
+// line-based and avoids leaving a newline behind for the next prompt.
+void CLI::run() {
     showWelcome();
     waitForEnter();
 
@@ -73,14 +85,17 @@ void CLI::run()
         << "Thank you for using the circuit simulator.\n\n";
 }
 
-
-void CLI::clearScreen() const
-{
-    // Clear the terminal and move the cursor back to the top-left.
-    std::cout << "\033[2J\033[H" << std::flush;
+// Clear the terminal and move the cursor back to the top-left.
+// ANSI escape codes keep this simple and avoid platform-specific console APIs.
+// The trade-off is that colour/clearing depends on the terminal supporting ANSI codes.
+void CLI::clearScreen() const {
+    std::cout << CLEAR_SCREEN << CURSOR_HOME << std::flush;
 }
 
-
+// Display a header with the program title, current netlist filename, and page title.
+// The header is formatted with ANSI color codes for better readability.
+// The page title is passed by const reference because it is read-only and does not need
+// to be copied. Passing a std::string by value would also work, but gives no benefit here.
 void CLI::showHeader(const std::string& pageTitle) const
 {
     clearScreen();
@@ -116,9 +131,8 @@ void CLI::showHeader(const std::string& pageTitle) const
     std::cout << '\n';
 }
 
-
-void CLI::showWelcome() const
-{
+// Display a welcome message to the user when the program starts.
+void CLI::showWelcome() const {
     showHeader("Welcome");
 
     std::cout
@@ -126,9 +140,9 @@ void CLI::showWelcome() const
         << "and provides command-line circuit analysis.\n";
 }
 
-
-void CLI::showMainMenu() const
-{
+// Display the main menu options to the user.
+// Used as a separate function for better code organization and reusability.
+void CLI::showMainMenu() const {
     showHeader("Main Menu");
 
     std::cout
@@ -136,9 +150,9 @@ void CLI::showMainMenu() const
         << "2. Quit\n";
 }
 
-
-std::string CLI::promptForNetlist() const
-{
+// Ask for a netlist path as a complete line, so paths containing spaces also work.
+// A single Q/q is used as the cancel command rather than adding another menu level.
+std::string CLI::promptForNetlist() const {
     showHeader("Load Netlist");
 
     std::cout
@@ -152,15 +166,19 @@ std::string CLI::promptForNetlist() const
     return filename;
 }
 
-
+// Load the netlist file specified by the user and create a Circuit object.
+// If the netlist is loaded successfully, display the component list and analysis menu.
+// If an error occurs during loading, display an error message and return to the main menu.
 void CLI::loadNetlist()
 {
     const std::string filename = promptForNetlist();
 
+    // Allow the user to cancel loading a netlist and return to the main menu.
     if (filename == "q" || filename == "Q") {
         return;
     }
 
+    // Error handling for empty filename input.
     if (filename.empty()) {
         std::cout
             << RED
@@ -180,39 +198,39 @@ void CLI::loadNetlist()
         << std::flush;
 
     try {
-        // Parse the netlist and construct a new circuit.
+        // Leave file parsing to ReadNetlist rather than doing it inside the CLI.
+        // Keeping parsing and user-interface code separate makes both easier to change and test.
         ReadNetlist reader(filename);
         Circuit loadedCircuit = reader.read();
 
-        /*
-         * Only replace the currently loaded circuit once the new
-         * netlist has been read successfully.
-         */
+        // Move the finished Circuit into the optional instead of copying all of its components.
+        // Copy assignment would be simpler-looking, but moving is appropriate because loadedCircuit
+        // is only a temporary result and is not used afterwards.
         circuit = std::move(loadedCircuit);
         currentNetlistFilename = filename;
 
         showComponentList();
         analysisMenu();
-    }
-    catch (const std::exception& error) {
+    } catch (const std::exception& error) {
         showHeader("Error Loading Netlist");
 
+        // Display the error message in red to indicate a failure in loading the netlist.
         std::cout
             << RED
             << "The netlist could not be loaded.\n\n"
             << RESET
-            << error.what()
+            << error.what() 
             << '\n';
 
         waitForEnter();
     }
 }
 
-
-void CLI::showComponentList() const
-{
+// Display the list of components in the currently loaded circuit.
+void CLI::showComponentList() const {
     showHeader("Component List");
 
+    // If no circuit is loaded, display an error message and return to the main menu.
     if (!circuit.has_value()) {
         std::cout
             << RED
@@ -223,6 +241,11 @@ void CLI::showComponentList() const
         return;
     }
 
+    // Display the component list in a formatted table.
+    // The table includes the component number, name, type, nodes, value, frequency, and phase.
+    // The frequency and phase are only displayed for voltage sources; other components show "-" in those columns.
+    // Keep a const reference to the component collection. `auto` avoids repeating its long
+    // smart-pointer container type, while the reference avoids copying the whole collection.
     const auto& components = circuit->getComponents();
 
     std::cout
@@ -231,7 +254,10 @@ void CLI::showComponentList() const
         << RESET
         << '\n';
 
-    // Table headings.
+    // Table headings with fixed widths for alignment.
+    // The width may need to be adjusted based on the expected length of component names and types.
+    // The width is repated again further down based on the empty space needed for each component and its values.
+
     std::cout
         << std::left
         << std::setw(5)  << "No."
@@ -261,19 +287,15 @@ void CLI::showComponentList() const
             << std::setw(8)  << component.getNode2()
             << std::setw(14) << component.getValue();
 
-        /*
-         * Voltage sources may contain additional waveform
-         * information which is not part of the base Component class.
-         */
+        // Components are stored through the common Component interface. A dynamic_cast is used
+        // here because frequency and phase only exist on VoltageSource. A type flag or string
+        // comparison could also be used, but the cast checks the real runtime type directly.
         const VoltageSource* voltageSource =
             dynamic_cast<const VoltageSource*>(&component);
 
         if (voltageSource != nullptr) {
-
-            /*
-             * Replace these getter names if your VoltageSource.hpp
-             * uses different names.
-             */
+            // Display frequency and phase for AC voltage sources; display "-" for DC voltage sources.
+            // Uses the getters from the VoltageSource class to retrieve the frequency and phase values.
             if (voltageSource->getFrequency() != 0.0) {
                 std::cout
                     << std::setw(16)
@@ -283,6 +305,7 @@ void CLI::showComponentList() const
             }
             else {
                 // DC voltage source.
+                // Display "-" for frequency and phase.
                 std::cout
                     << std::setw(16) << "-"
                     << "-";
@@ -310,9 +333,10 @@ void CLI::showComponentList() const
     waitForEnter();
 }
 
-
-void CLI::waitForEnter() const
-{
+// Pause between screens so output does not disappear immediately when the next header clears
+// the terminal. std::cin.get() is enough here because the earlier input code consumes pending newlines.
+void CLI::waitForEnter() const {
+    // Uses ANSI color codes to display the prompt in yellow for better visibility.
     std::cout
         << YELLOW
         << "\nPress Enter to continue..."
@@ -321,8 +345,12 @@ void CLI::waitForEnter() const
     std::cin.get();
 }
 
-void CLI::analysisMenu()
-{
+// Display the analysis menu and allow the user to select the type of analysis to perform.
+// The user can choose between DC operating point analysis, transient analysis, returning to the main menu, or quitting the program.
+// The menu will continue to be displayed until the user chooses to return to the main menu or quit.
+void CLI::analysisMenu() {
+    // This menu has its own flag as well as the class-wide `running` flag. That lets option 3
+    // leave only this submenu, while option 4 can stop the entire CLI without using break/goto.
     bool analysisRunning = true;
 
     while (analysisRunning && running) {
@@ -363,6 +391,9 @@ void CLI::analysisMenu()
     }
 }
 
+// Perform DC operating point analysis using nodal analysis.
+// Uses the NodalAnalysis class to solve for node voltages in the circuit.
+// Displays the results in a formatted table. If an error occurs during analysis, an error message is displayed.
 void CLI::runDCAnalysis() {
     showHeader("DC Operating Point");
 
@@ -383,6 +414,8 @@ void CLI::runDCAnalysis() {
     try {
         NodalAnalysis analysis(*circuit);
 
+        // `auto` keeps this independent of the exact container returned by solve(). It is stored
+        // by value because this function owns the results it is about to display.
         const auto nodeVoltages = analysis.solve();
 
         showHeader("DC Operating Point");
@@ -401,17 +434,13 @@ void CLI::runDCAnalysis() {
         std::cout
             << "----------------------------\n";
 
-        // Ground is always 0 V.
+        // Ground (GND and commonly node 0) is always 0 V.
         std::cout
             << std::left
             << std::setw(12) << 0
             << 0.0
             << '\n';
 
-        /*
-         * The returned vector contains the voltages for
-         * non-ground nodes.
-         */
         for (std::size_t index = 0;
              index < nodeVoltages.size();
              ++index) {
@@ -440,10 +469,17 @@ void CLI::runDCAnalysis() {
     waitForEnter();
 }
 
-void CLI::runTransientAnalysis()
-{
+// Perform transient analysis on a simple first-order RC circuit.
+// Currently supports only circuits with one resistor, one capacitor, and one DC voltage source.
+// The netlist is validated to ensure it meets these requirements before proceeding with the analysis.
+// The user is prompted to enter the initial capacitor voltage, simulation stop time, and time step.
+// The transient analysis is performed using a first-order ODE solver class.
+// The results are displayed in the terminal using the graph plotter class.
+// If an error occurs during the analysis, an error message is displayed.
+void CLI::runTransientAnalysis() {
     showHeader("Transient Analysis");
 
+    // Check if a circuit is loaded before proceeding with the analysis.
     if (!circuit.has_value()) {
         std::cout
             << RED
@@ -454,14 +490,14 @@ void CLI::runTransientAnalysis()
         return;
     }
 
-    // -----------------------------------------------------
-    // Find the components required for a simple RC circuit.
-    // -----------------------------------------------------
+    // Checks if the circuit contains exactly one resistor, one capacitor, and one DC voltage source.
 
+    // Initialize pointers to the components and counters for each type of component.
     const Resistor* resistor = nullptr;
     const Capacitor* capacitor = nullptr;
     const VoltageSource* source = nullptr;
 
+    // Counters for each type of component in the circuit.
     int resistorCount = 0;
     int capacitorCount = 0;
     int dcSourceCount = 0;
@@ -469,6 +505,8 @@ void CLI::runTransientAnalysis()
     for (const auto& componentPtr : circuit->getComponents()) {
         const Component* component = componentPtr.get();
 
+        // dynamic_cast is used because the Circuit owns components through base-class pointers.
+        // It is safer than a static_cast here: a failed cast simply returns nullptr.
         if (const auto* r =
                 dynamic_cast<const Resistor*>(component)) {
 
@@ -518,6 +556,9 @@ void CLI::runTransientAnalysis()
         return;
     }
 
+    // This is deliberately defensive. The counts above should already prove that all three
+    // pointers are valid, but keeping the check prevents accidental dereferencing if the
+    // component-selection logic is changed later.
     if (resistor == nullptr ||
         capacitor == nullptr ||
         source == nullptr) {
@@ -549,6 +590,7 @@ void CLI::runTransientAnalysis()
         return;
     }
 
+    // Cache RC because it is both useful to the user and repeatedly meaningful physically.
     const double timeConstant = R * C;
 
     std::cout
@@ -626,7 +668,10 @@ void CLI::runTransientAnalysis()
         return;
     }
 
-    // Remove the newline left by operator >>.
+    // Numeric entry uses operator >> because it performs type checking for doubles. Unlike the
+    // menu prompts, it leaves the final newline in the stream, so discard it before returning
+    // to getline-based menus. Using getline + stod everywhere was another option, but would add
+    // manual string-to-number parsing for no real advantage here.
     std::cin.ignore(
         std::numeric_limits<std::streamsize>::max(),
         '\n'
@@ -636,6 +681,8 @@ void CLI::runTransientAnalysis()
     // Validate simulation parameters.
     // -----------------------------------------------------
 
+    // Reject non-finite/invalid simulation settings before passing them to the solver.
+    // These checks are kept in the CLI so bad user input is reported with a useful message.
     if (stopTime == std::numeric_limits<double>::infinity()) {
         std::cout
             << RED
@@ -720,6 +767,9 @@ void CLI::runTransientAnalysis()
     //
     // -----------------------------------------------------
 
+    // A lambda keeps this small equation next to the code that uses it. A separate named
+    // function would also work, but then R, C and Vs would have to be passed or stored elsewhere.
+    // Capture by value makes a stable copy of the circuit parameters for the solver callback.
     auto rcEquation =
         [R, C, Vs](double time, double capacitorVoltage) {
         return (Vs - capacitorVoltage) / (R * C);
@@ -782,7 +832,8 @@ void CLI::runTransientAnalysis()
         resistorSeries.name = "Resistor Voltage";
         resistorSeries.symbol = 'R';
         resistorSeries.color = PlotColor::Magenta;
-        // Calculate the resistor voltage as Vs - Vc.
+        // For this series RC case, KVL gives Vr = Vs - Vc. Reserve the final size first so the
+        // vector does not repeatedly reallocate while points are appended.
         resistorSeries.y.reserve(voltageValues.size());
         for (const auto& vc : voltageValues) {
             resistorSeries.y.push_back(Vs - vc);
@@ -796,6 +847,8 @@ void CLI::runTransientAnalysis()
         // Create the terminal plot.
         // -------------------------------------------------
 
+        // A fixed width gives predictable terminal output. Automatically using the terminal
+        // width would be more adaptive, but also needs platform-specific terminal-size handling.
         Plot plot(
             100,     // Plot width
             "s",    // X-axis units
