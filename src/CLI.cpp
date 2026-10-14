@@ -514,7 +514,7 @@ void CLI::runBangBangControllerSimulation() {
         }
     }
 
-    if (resistorCount != 1 || capacitorCount != 1 || dcSourceCount != 1) {
+    if (resistorCount != 1 || capacitorCount != 1 || dcSourceCount != 1 || nodeCount != 3) {
         std::cout
             << RED
             << "Bang-bang control currently supports a simple first-order RC circuit.\n\n"
