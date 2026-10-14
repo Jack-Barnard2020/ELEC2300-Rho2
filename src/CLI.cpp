@@ -514,6 +514,10 @@ void CLI::runBangBangControllerSimulation() {
         }
     }
 
+    // Calculate the number of nodes. As part of the RC verification
+
+    const int nodeCount = circuit->getHighestNode() + 1;
+
     if (resistorCount != 1 || capacitorCount != 1 || dcSourceCount != 1 || nodeCount != 3) {
         std::cout
             << RED
