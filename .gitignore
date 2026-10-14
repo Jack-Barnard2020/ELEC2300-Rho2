@@ -71,9 +71,15 @@ Testing/
 *.elf
 *.exec
 *.exe
-
-
+# Executable files (cirucit_simulator)
+"circuit_simulator"
 
 # VS Code directories
 .vscode/
 
+# Test direcories
+test/
+
+# Netlist files
+.net
+netlists/
