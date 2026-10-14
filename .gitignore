@@ -83,3 +83,6 @@ test/
 # Netlist files
 .net
 netlists/
+
+# DS store
+.DS_Store
