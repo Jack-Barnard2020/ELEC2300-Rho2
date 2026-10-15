@@ -32,7 +32,7 @@
 #include <limits>
 #include <stdexcept>
 
-#define SCREEN_WIDTH 120
+#define SCREEN_WIDTH 140
 
 // Keep terminal formatting constants local to this translation unit.
 // An unnamed namespace was chosen instead of globals in CLI.hpp because these values are
