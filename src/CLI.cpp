@@ -9,34 +9,33 @@
         2026/10/13 - Added transient analysis functionality and plotting (Jack Barnard)
         2026/10/13 - Improved commenting (Jack Barnard)
         2026/10/14 - Finished explanatory comments and documented design choices (Jack Barnard)
+        2026/10/15 - Added RC, RL and RLC transient analysis support (Jack Barnard)
    ====================================== */
 
-// Include the header files written for this project.
 #include "CLI.hpp"
 #include "ReadNetlist.hpp"
 #include "VoltageSource.hpp"
 #include "NodalAnalysis.hpp"
 #include "FirstOrderODESolver.hpp"
+#include "SecondOrderODESolver.hpp"
 #include "Resistor.hpp"
 #include "Capacitor.hpp"
+#include "Inductor.hpp"
 #include "Plotter.hpp"
 #include "Controller.hpp"
 
-// Include standard library headers.
 #include <cmath>
 #include <exception>
 #include <iomanip>
 #include <iostream>
-#include <string>
-#include <utility>
 #include <limits>
 #include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 
-#define SCREEN_WIDTH 140
+#define SCREEN_WIDTH 100
 
-// Keep terminal formatting constants local to this translation unit.
-// An unnamed namespace was chosen instead of globals in CLI.hpp because these values are
-// only an implementation detail of the CLI and do not need to be visible to other files.
 namespace {
 
 constexpr const char* RESET  = "\033[0m";
@@ -48,12 +47,8 @@ constexpr const char* YELLOW = "\033[33m";
 constexpr const char* CLEAR_SCREEN = "\033[2J";
 constexpr const char* CURSOR_HOME  = "\033[H";
 
-} 
+}
 
-
-// Main entry point for the command-line interface.
-// Menu choices are read with getline rather than `cin >> choice`. This keeps menu input
-// line-based and avoids leaving a newline behind for the next prompt.
 void CLI::run() {
     showWelcome();
     waitForEnter();
@@ -88,17 +83,10 @@ void CLI::run() {
         << "Thank you for using the circuit simulator.\n\n";
 }
 
-// Clear the terminal and move the cursor back to the top-left.
-// ANSI escape codes keep this simple and avoid platform-specific console APIs.
-// The trade-off is that colour/clearing depends on the terminal supporting ANSI codes.
 void CLI::clearScreen() const {
     std::cout << CLEAR_SCREEN << CURSOR_HOME << std::flush;
 }
 
-// Display a header with the program title, current netlist filename, and page title.
-// The header is formatted with ANSI color codes for better readability.
-// The page title is passed by const reference because it is read-only and does not need
-// to be copied. Passing a std::string by value would also work, but gives no benefit here.
 void CLI::showHeader(const std::string& pageTitle) const
 {
     clearScreen();
@@ -134,7 +122,6 @@ void CLI::showHeader(const std::string& pageTitle) const
     std::cout << '\n';
 }
 
-// Display a welcome message to the user when the program starts.
 void CLI::showWelcome() const {
     showHeader("Welcome");
 
@@ -143,8 +130,6 @@ void CLI::showWelcome() const {
         << "and provides command-line circuit analysis.\n";
 }
 
-// Display the main menu options to the user.
-// Used as a separate function for better code organization and reusability.
 void CLI::showMainMenu() const {
     showHeader("Main Menu");
 
@@ -153,8 +138,6 @@ void CLI::showMainMenu() const {
         << "2. Quit\n";
 }
 
-// Ask for a netlist path as a complete line, so paths containing spaces also work.
-// A single Q/q is used as the cancel command rather than adding another menu level.
 std::string CLI::promptForNetlist() const {
     showHeader("Load Netlist");
 
@@ -169,19 +152,14 @@ std::string CLI::promptForNetlist() const {
     return filename;
 }
 
-// Load the netlist file specified by the user and create a Circuit object.
-// If the netlist is loaded successfully, display the component list and analysis menu.
-// If an error occurs during loading, display an error message and return to the main menu.
 void CLI::loadNetlist()
 {
     const std::string filename = promptForNetlist();
 
-    // Allow the user to cancel loading a netlist and return to the main menu.
     if (filename == "q" || filename == "Q") {
         return;
     }
 
-    // Error handling for empty filename input.
     if (filename.empty()) {
         std::cout
             << RED
@@ -201,39 +179,32 @@ void CLI::loadNetlist()
         << std::flush;
 
     try {
-        // Leave file parsing to ReadNetlist rather than doing it inside the CLI.
-        // Keeping parsing and user-interface code separate makes both easier to change and test.
         ReadNetlist reader(filename);
         Circuit loadedCircuit = reader.read();
 
-        // Move the finished Circuit into the optional instead of copying all of its components.
-        // Copy assignment would be simpler-looking, but moving is appropriate because loadedCircuit
-        // is only a temporary result and is not used afterwards.
         circuit = std::move(loadedCircuit);
         currentNetlistFilename = filename;
 
         showComponentList();
         analysisMenu();
-    } catch (const std::exception& error) {
+    }
+    catch (const std::exception& error) {
         showHeader("Error Loading Netlist");
 
-        // Display the error message in red to indicate a failure in loading the netlist.
         std::cout
             << RED
             << "The netlist could not be loaded.\n\n"
             << RESET
-            << error.what() 
+            << error.what()
             << '\n';
 
         waitForEnter();
     }
 }
 
-// Display the list of components in the currently loaded circuit.
 void CLI::showComponentList() const {
     showHeader("Component List");
 
-    // If no circuit is loaded, display an error message and return to the main menu.
     if (!circuit.has_value()) {
         std::cout
             << RED
@@ -244,11 +215,6 @@ void CLI::showComponentList() const {
         return;
     }
 
-    // Display the component list in a formatted table.
-    // The table includes the component number, name, type, nodes, value, frequency, and phase.
-    // The frequency and phase are only displayed for voltage sources; other components show "-" in those columns.
-    // Keep a const reference to the component collection. `auto` avoids repeating its long
-    // smart-pointer container type, while the reference avoids copying the whole collection.
     const auto& components = circuit->getComponents();
 
     std::cout
@@ -256,10 +222,6 @@ void CLI::showComponentList() const {
         << "Netlist loaded successfully.\n"
         << RESET
         << '\n';
-
-    // Table headings with fixed widths for alignment.
-    // The width may need to be adjusted based on the expected length of component names and types.
-    // The width is repated again further down based on the empty space needed for each component and its values.
 
     std::cout
         << std::left
@@ -275,10 +237,7 @@ void CLI::showComponentList() const {
     std::cout
         << "---------------------------------------------------------------------------------------\n";
 
-    for (std::size_t index = 0;
-         index < components.size();
-         ++index) {
-
+    for (std::size_t index = 0; index < components.size(); ++index) {
         const Component& component = *components.at(index);
 
         std::cout
@@ -290,15 +249,10 @@ void CLI::showComponentList() const {
             << std::setw(8)  << component.getNode2()
             << std::setw(14) << component.getValue();
 
-        // Components are stored through the common Component interface. A dynamic_cast is used
-        // here because frequency and phase only exist on VoltageSource. A type flag or string
-        // comparison could also be used, but the cast checks the real runtime type directly.
         const VoltageSource* voltageSource =
             dynamic_cast<const VoltageSource*>(&component);
 
         if (voltageSource != nullptr) {
-            // Display frequency and phase for AC voltage sources; display "-" for DC voltage sources.
-            // Uses the getters from the VoltageSource class to retrieve the frequency and phase values.
             if (voltageSource->getFrequency() != 0.0) {
                 std::cout
                     << std::setw(16)
@@ -307,15 +261,12 @@ void CLI::showComponentList() const {
                     << " deg";
             }
             else {
-                // DC voltage source.
-                // Display "-" for frequency and phase.
                 std::cout
                     << std::setw(16) << "-"
                     << "-";
             }
         }
         else {
-            // R, L and C components have no source frequency/phase.
             std::cout
                 << std::setw(16) << "-"
                 << "-";
@@ -336,10 +287,7 @@ void CLI::showComponentList() const {
     waitForEnter();
 }
 
-// Pause between screens so output does not disappear immediately when the next header clears
-// the terminal. std::cin.get() is enough here because the earlier input code consumes pending newlines.
 void CLI::waitForEnter() const {
-    // Uses ANSI color codes to display the prompt in yellow for better visibility.
     std::cout
         << YELLOW
         << "\nPress Enter to continue..."
@@ -348,12 +296,7 @@ void CLI::waitForEnter() const {
     std::cin.get();
 }
 
-// Display the analysis menu and allow the user to select the type of analysis to perform.
-// The user can choose between DC operating point analysis, transient analysis, returning to the main menu, or quitting the program.
-// The menu will continue to be displayed until the user chooses to return to the main menu or quit.
 void CLI::analysisMenu() {
-    // This menu has its own flag as well as the class-wide `running` flag. That lets option 3
-    // leave only this submenu, while option 4 can stop the entire CLI without using break/goto.
     bool analysisRunning = true;
 
     while (analysisRunning && running) {
@@ -398,9 +341,6 @@ void CLI::analysisMenu() {
     }
 }
 
-// Perform DC operating point analysis using nodal analysis.
-// Uses the NodalAnalysis class to solve for node voltages in the circuit.
-// Displays the results in a formatted table. If an error occurs during analysis, an error message is displayed.
 void CLI::runDCAnalysis() {
     showHeader("DC Operating Point");
 
@@ -420,9 +360,6 @@ void CLI::runDCAnalysis() {
 
     try {
         NodalAnalysis analysis(*circuit);
-
-        // `auto` keeps this independent of the exact container returned by solve(). It is stored
-        // by value because this function owns the results it is about to display.
         const auto nodeVoltages = analysis.solve();
 
         showHeader("DC Operating Point");
@@ -441,17 +378,13 @@ void CLI::runDCAnalysis() {
         std::cout
             << "----------------------------\n";
 
-        // Ground (GND and commonly node 0) is always 0 V.
         std::cout
             << std::left
             << std::setw(12) << 0
             << 0.0
             << '\n';
 
-        for (std::size_t index = 0;
-             index < nodeVoltages.size();
-             ++index) {
-
+        for (std::size_t index = 0; index < nodeVoltages.size(); ++index) {
             const std::size_t nodeNumber = index + 1;
 
             std::cout
@@ -476,9 +409,6 @@ void CLI::runDCAnalysis() {
     waitForEnter();
 }
 
-
-
-// Run the RC simulation with a bang-bang controller.
 void CLI::runBangBangControllerSimulation() {
     showHeader("Bang-Bang Controller Simulation");
 
@@ -514,11 +444,10 @@ void CLI::runBangBangControllerSimulation() {
         }
     }
 
-    // Calculate the number of nodes. As part of the RC verification
-
     const int nodeCount = circuit->getHighestNode() + 1;
 
-    if (resistorCount != 1 || capacitorCount != 1 || dcSourceCount != 1 || nodeCount != 3) {
+    if (resistorCount != 1 || capacitorCount != 1 ||
+        dcSourceCount != 1 || nodeCount != 3) {
         std::cout
             << RED
             << "Bang-bang control currently supports a simple first-order RC circuit.\n\n"
@@ -700,422 +629,427 @@ void CLI::runBangBangControllerSimulation() {
     waitForEnter();
 }
 
-// Perform transient analysis on a simple first-order RC circuit.
-// Currently supports only circuits with one resistor, one capacitor, and one DC voltage source.
-// The netlist is validated to ensure it meets these requirements before proceeding with the analysis.
-// The user is prompted to enter the initial capacitor voltage, simulation stop time, and time step.
-// The transient analysis is performed using a first-order ODE solver class.
-// The results are displayed in the terminal using the graph plotter class.
-// If an error occurs during the analysis, an error message is displayed.
-void CLI::runTransientAnalysis() {
+void CLI::runTransientAnalysis()
+{
     showHeader("Transient Analysis");
 
-    // Check if a circuit is loaded before proceeding with the analysis.
     if (!circuit.has_value()) {
-        std::cout
-            << RED
-            << "No circuit is currently loaded.\n"
-            << RESET;
-
+        std::cout << RED << "No circuit is currently loaded.\n" << RESET;
         waitForEnter();
         return;
     }
 
-    // Checks if the circuit contains exactly one resistor, one capacitor, and one DC voltage source.
-
-    // Initialize pointers to the components and counters for each type of component.
     const Resistor* resistor = nullptr;
     const Capacitor* capacitor = nullptr;
+    const Inductor* inductor = nullptr;
     const VoltageSource* source = nullptr;
 
-    // Counters for each type of component in the circuit.
     int resistorCount = 0;
     int capacitorCount = 0;
+    int inductorCount = 0;
     int dcSourceCount = 0;
 
     for (const auto& componentPtr : circuit->getComponents()) {
         const Component* component = componentPtr.get();
 
-        // dynamic_cast is used because the Circuit owns components through base-class pointers.
-        // It is safer than a static_cast here: a failed cast simply returns nullptr.
-        if (const auto* r =
-                dynamic_cast<const Resistor*>(component)) {
-
+        if (const auto* r = dynamic_cast<const Resistor*>(component)) {
             resistor = r;
             ++resistorCount;
         }
-        else if (const auto* c =
-                     dynamic_cast<const Capacitor*>(component)) {
-
+        else if (const auto* c = dynamic_cast<const Capacitor*>(component)) {
             capacitor = c;
             ++capacitorCount;
         }
-        else if (const auto* v =
-                     dynamic_cast<const VoltageSource*>(component)) {
-
-            // For now a frequency of zero is treated as a DC source.
-            if (v->getFrequency() == 0.0) {
+        else if (const auto* l = dynamic_cast<const Inductor*>(component)) {
+            inductor = l;
+            ++inductorCount;
+        }
+        else if (const auto* v = dynamic_cast<const VoltageSource*>(component)) {
+            if (!v->getIsAC()) {
                 source = v;
                 ++dcSourceCount;
             }
         }
     }
 
-    // -----------------------------------------------------
-    // Validate the circuit.
-    // -----------------------------------------------------
+    const bool isRC =
+        resistorCount == 1 && capacitorCount == 1 &&
+        inductorCount == 0 && dcSourceCount == 1;
 
-    if (resistorCount != 1 ||
-        capacitorCount != 1 ||
-        dcSourceCount != 1) {
+    const bool isRL =
+        resistorCount == 1 && capacitorCount == 0 &&
+        inductorCount == 1 && dcSourceCount == 1;
 
+    const bool isRLC =
+        resistorCount == 1 && capacitorCount == 1 &&
+        inductorCount == 1 && dcSourceCount == 1;
+
+    if (!isRC && !isRL && !isRLC) {
         std::cout
             << RED
-            << "Transient analysis currently supports a simple "
-            << "first-order RC circuit.\n\n"
+            << "Transient analysis supports simple series RC, RL or RLC circuits.\n\n"
             << RESET
-            << "The circuit must contain exactly:\n"
-            << "  - one resistor\n"
-            << "  - one capacitor\n"
-            << "  - one DC voltage source\n\n"
-            << "Detected:\n"
+            << "Detected components:\n"
             << "  Resistors:          " << resistorCount << '\n'
             << "  Capacitors:         " << capacitorCount << '\n'
+            << "  Inductors:          " << inductorCount << '\n'
             << "  DC voltage sources: " << dcSourceCount << '\n';
 
         waitForEnter();
         return;
     }
 
-    // This is deliberately defensive. The counts above should already prove that all three
-    // pointers are valid, but keeping the check prevents accidental dereferencing if the
-    // component-selection logic is changed later.
-    if (resistor == nullptr ||
-        capacitor == nullptr ||
-        source == nullptr) {
+    const double R = resistor->getResistance();
+    const double C = capacitor == nullptr ? 0.0 : capacitor->getCapacitance();
+    const double L = inductor == nullptr ? 0.0 : inductor->getInductance();
+    const double Vs = source->getVoltage(0.0);
 
-        std::cout
-            << RED
-            << "The RC components could not be identified.\n"
-            << RESET;
-
+    if (R <= 0.0 ||
+        (capacitor != nullptr && C <= 0.0) ||
+        (inductor != nullptr && L <= 0.0)) {
+        std::cout << RED << "Circuit component values must be positive.\n" << RESET;
         waitForEnter();
         return;
     }
 
-    // -----------------------------------------------------
-    // Extract circuit parameters.
-    // -----------------------------------------------------
-
-    const double R = resistor->getValue();
-    const double C = capacitor->getValue();
-    const double Vs = source->getValue();
-
-    if (R <= 0.0 || C <= 0.0) {
-        std::cout
-            << RED
-            << "Resistance and capacitance must be greater than zero.\n"
-            << RESET;
-
-        waitForEnter();
-        return;
-    }
-
-    // Cache RC because it is both useful to the user and repeatedly meaningful physically.
-    const double timeConstant = R * C;
+    constexpr double PI = 3.14159265358979323846;
+    double recommendedTimeStep = 0.0;
 
     std::cout
         << GREEN
-        << "Simple RC circuit detected.\n"
+        << "Supported transient circuit detected.\n"
         << RESET
-        << '\n'
-        << "Resistance:     " << R << " ohms\n"
-        << "Capacitance:    " << C << " F\n"
-        << "Source voltage: " << Vs << " V\n"
-        << "Time constant:  " << timeConstant << " s\n\n";
+        << '\n';
 
-    // -----------------------------------------------------
-    // Ask the user for simulation parameters.
-    // -----------------------------------------------------
+    if (isRC) {
+        const double timeConstant = R * C;
+        recommendedTimeStep = timeConstant / 20.0;
+
+        std::cout
+            << "Circuit type:       Series RC\n"
+            << "Source voltage:     " << Vs << " V\n"
+            << "Resistance:         " << R << " ohms\n"
+            << "Capacitance:        " << C << " F\n"
+            << "Time constant:      " << timeConstant << " s\n"
+            << "Suggested timestep: less than "
+            << recommendedTimeStep << " s\n\n";
+    }
+    else if (isRL) {
+        const double timeConstant = L / R;
+        recommendedTimeStep = timeConstant / 20.0;
+
+        std::cout
+            << "Circuit type:       Series RL\n"
+            << "Source voltage:     " << Vs << " V\n"
+            << "Resistance:         " << R << " ohms\n"
+            << "Inductance:         " << L << " H\n"
+            << "Time constant:      " << timeConstant << " s\n"
+            << "Final DC current:   " << Vs / R << " A\n"
+            << "Suggested timestep: less than "
+            << recommendedTimeStep << " s\n\n";
+    }
+    else {
+        const double naturalAngularFrequency =
+            1.0 / std::sqrt(L * C);
+        const double naturalFrequency =
+            naturalAngularFrequency / (2.0 * PI);
+        const double naturalPeriod =
+            1.0 / naturalFrequency;
+        const double dampingFactor =
+            R / (2.0 * L);
+
+        recommendedTimeStep = naturalPeriod / 100.0;
+
+        std::cout
+            << "Circuit type:       Series RLC\n"
+            << "Source voltage:     " << Vs << " V\n"
+            << "Resistance:         " << R << " ohms\n"
+            << "Inductance:         " << L << " H\n"
+            << "Capacitance:        " << C << " F\n"
+            << "Natural frequency:  " << naturalFrequency << " Hz\n"
+            << "Natural period:     " << naturalPeriod << " s\n"
+            << "Damping factor:     " << dampingFactor << " 1/s\n"
+            << "Suggested timestep: less than "
+            << recommendedTimeStep << " s\n\n";
+    }
 
     double initialVoltage = 0.0;
+    double initialCurrent = 0.0;
     double stopTime = 0.0;
     double timeStep = 0.0;
 
-    std::cout << "Initial capacitor voltage (V): ";
+    auto readDouble = [](const char* prompt, double& value) {
+        std::cout << prompt;
 
-    if (!(std::cin >> initialVoltage)) {
+        if (std::cin >> value) {
+            return true;
+        }
+
         std::cin.clear();
-
         std::cin.ignore(
             std::numeric_limits<std::streamsize>::max(),
             '\n'
         );
+        return false;
+    };
 
-        std::cout
-            << RED
-            << "\nInvalid initial voltage.\n"
-            << RESET;
-
+    if ((isRC || isRLC) &&
+        !readDouble("Initial capacitor voltage (V): ", initialVoltage)) {
+        std::cout << RED << "\nInvalid initial capacitor voltage.\n" << RESET;
         waitForEnter();
         return;
     }
 
-    std::cout << "Simulation stop time (s): ";
-
-    if (!(std::cin >> stopTime)) {
-        std::cin.clear();
-
-        std::cin.ignore(
-            std::numeric_limits<std::streamsize>::max(),
-            '\n'
-        );
-
-        std::cout
-            << RED
-            << "\nInvalid stop time.\n"
-            << RESET;
-
+    if ((isRL || isRLC) &&
+        !readDouble("Initial inductor current (A): ", initialCurrent)) {
+        std::cout << RED << "\nInvalid initial inductor current.\n" << RESET;
         waitForEnter();
         return;
     }
 
-    std::cout << "Simulation time step (s): ";
-
-    if (!(std::cin >> timeStep)) {
-        std::cin.clear();
-
-        std::cin.ignore(
-            std::numeric_limits<std::streamsize>::max(),
-            '\n'
-        );
-
-        std::cout
-            << RED
-            << "\nInvalid time step.\n"
-            << RESET;
-
+    if (!readDouble("Simulation stop time (s): ", stopTime) ||
+        !readDouble("Simulation time step (s): ", timeStep)) {
+        std::cout << RED << "\nInvalid simulation setting.\n" << RESET;
         waitForEnter();
         return;
     }
 
-    // Numeric entry uses operator >> because it performs type checking for doubles. Unlike the
-    // menu prompts, it leaves the final newline in the stream, so discard it before returning
-    // to getline-based menus. Using getline + stod everywhere was another option, but would add
-    // manual string-to-number parsing for no real advantage here.
     std::cin.ignore(
         std::numeric_limits<std::streamsize>::max(),
         '\n'
     );
 
-    // -----------------------------------------------------
-    // Validate simulation parameters.
-    // -----------------------------------------------------
-
-    // Reject non-finite/invalid simulation settings before passing them to the solver.
-    // These checks are kept in the CLI so bad user input is reported with a useful message.
-    if (stopTime == std::numeric_limits<double>::infinity()) {
-        std::cout
-            << RED
-            << "\nStop time cannot be infinity.\n"
-            << RESET;
-
+    if (!std::isfinite(initialVoltage) ||
+        !std::isfinite(initialCurrent) ||
+        !std::isfinite(stopTime) ||
+        !std::isfinite(timeStep) ||
+        stopTime <= 0.0 ||
+        timeStep <= 0.0 ||
+        timeStep > stopTime) {
+        std::cout << RED << "\nInvalid transient analysis settings.\n" << RESET;
         waitForEnter();
         return;
     }
 
-    if (stopTime == std::numeric_limits<double>::quiet_NaN()) {
+    if (timeStep > recommendedTimeStep) {
         std::cout
-            << RED
-            << "\nStop time cannot be NaN.\n"
+            << YELLOW
+            << "\nWarning: the selected timestep may be too large.\n"
+            << "A timestep below " << recommendedTimeStep
+            << " s is recommended for this circuit.\n"
             << RESET;
-
         waitForEnter();
-        return;
     }
-
-    if (stopTime <= 0.0) {
-        std::cout
-            << RED
-            << "\nStop time must be greater than zero.\n"
-            << RESET;
-
-        waitForEnter();
-        return;
-    }
-
-    if (timeStep <= 0.0) {
-        std::cout
-            << RED
-            << "\nTime step must be greater than zero.\n"
-            << RESET;
-
-        waitForEnter();
-        return;
-    }
-
-    if (timeStep == std::numeric_limits<double>::infinity()) {
-        std::cout
-            << RED
-            << "\nTime step cannot be infinity.\n"
-            << RESET;
-
-        waitForEnter();
-        return;
-    }
-
-    if (timeStep == std::numeric_limits<double>::quiet_NaN()) {
-        std::cout
-            << RED
-            << "\nTime step cannot be NaN.\n"
-            << RESET;
-
-        waitForEnter();
-        return;
-    }
-    
-    if (timeStep > stopTime) {
-        std::cout
-            << RED
-            << "\nTime step cannot be greater than stop time.\n"
-            << RESET;
-
-        waitForEnter();
-        return;
-    }
-
-    // -----------------------------------------------------
-    // Define the first-order RC differential equation.
-    //
-    //              Vs - Vc
-    //     dVc/dt = ---------
-    //                 R C
-    //
-    // The ODE solver interprets:
-    //
-    //     x = time
-    //     y = capacitor voltage
-    //
-    // -----------------------------------------------------
-
-    // A lambda keeps this small equation next to the code that uses it. A separate named
-    // function would also work, but then R, C and Vs would have to be passed or stored elsewhere.
-    // Capture by value makes a stable copy of the circuit parameters for the solver callback.
-    auto rcEquation =
-        [R, C, Vs](double time, double capacitorVoltage) {
-        return (Vs - capacitorVoltage) / (R * C);
-    };
-
-    // -----------------------------------------------------
-    // Run the existing first-order ODE solver.
-    // -----------------------------------------------------
 
     try {
-        showHeader("Running Transient Analysis");
+        if (isRC) {
+            auto rcEquation =
+                [R, C, Vs](double /*time*/, double capacitorVoltage) {
+                    return (Vs - capacitorVoltage) / (R * C);
+                };
 
-        std::cout
-            << "Solving RC differential equation...\n\n"
-            << "Initial voltage: " << initialVoltage << " V\n"
-            << "Stop time:       " << stopTime << " s\n"
-            << "Time step:       " << timeStep << " s\n\n"
-            << std::flush;
-
-        FirstOrderODESolver solver;
-
-        solver.solveEuler(
-            rcEquation,
-            0.0,               // Initial time
-            initialVoltage,    // Initial capacitor voltage
-            timeStep,          // Euler step
-            stopTime           // Final time
-        );
-
-        // -------------------------------------------------
-        // Retrieve the solver output.
-        // -------------------------------------------------
-
-        const auto& timeValues = solver.getXValues();
-        const auto& voltageValues = solver.getYValues();
-
-        if (timeValues.empty() || voltageValues.empty()) {
-            throw std::runtime_error(
-                "The ODE solver returned no simulation data."
+            FirstOrderODESolver solver;
+            solver.solveEuler(
+                rcEquation,
+                0.0,
+                initialVoltage,
+                timeStep,
+                stopTime
             );
-        }
 
-        if (timeValues.size() != voltageValues.size()) {
-            throw std::runtime_error(
-                "The transient X and Y vectors have different sizes."
+            const auto& timeValues = solver.getXValues();
+            const auto& capacitorVoltageValues = solver.getYValues();
+
+            std::vector<double> resistorVoltageValues;
+            resistorVoltageValues.reserve(capacitorVoltageValues.size());
+
+            for (const double capacitorVoltage : capacitorVoltageValues) {
+                resistorVoltageValues.push_back(Vs - capacitorVoltage);
+            }
+
+            Series resistorSeries;
+            resistorSeries.name = "Resistor Voltage";
+            resistorSeries.y = resistorVoltageValues;
+            resistorSeries.symbol = 'R';
+            resistorSeries.color = PlotColor::Magenta;
+
+            Series capacitorSeries;
+            capacitorSeries.name = "Capacitor Voltage";
+            capacitorSeries.y = capacitorVoltageValues;
+            capacitorSeries.symbol = 'C';
+            capacitorSeries.color = PlotColor::Cyan;
+
+            Plot voltagePlot(SCREEN_WIDTH, "s", "V");
+
+            showHeader("RC Transient Results");
+            std::cout
+                << "Voltage across each passive component:\n\n"
+                << voltagePlot.plot(
+                    timeValues,
+                    std::vector<Series>{resistorSeries, capacitorSeries}
+                );
+        }
+        else if (isRL) {
+            auto rlEquation =
+                [R, L, Vs](double /*time*/, double current) {
+                    return (Vs - R * current) / L;
+                };
+
+            FirstOrderODESolver solver;
+            solver.solveEuler(
+                rlEquation,
+                0.0,
+                initialCurrent,
+                timeStep,
+                stopTime
             );
+
+            const auto& timeValues = solver.getXValues();
+            const auto& currentValues = solver.getYValues();
+
+            std::vector<double> resistorVoltageValues;
+            std::vector<double> inductorVoltageValues;
+            resistorVoltageValues.reserve(currentValues.size());
+            inductorVoltageValues.reserve(currentValues.size());
+
+            for (const double current : currentValues) {
+                const double resistorVoltage = R * current;
+                const double inductorVoltage = Vs - resistorVoltage;
+
+                resistorVoltageValues.push_back(resistorVoltage);
+                inductorVoltageValues.push_back(inductorVoltage);
+            }
+
+            Series resistorSeries;
+            resistorSeries.name = "Resistor Voltage";
+            resistorSeries.y = resistorVoltageValues;
+            resistorSeries.symbol = 'R';
+            resistorSeries.color = PlotColor::Magenta;
+
+            Series inductorSeries;
+            inductorSeries.name = "Inductor Voltage";
+            inductorSeries.y = inductorVoltageValues;
+            inductorSeries.symbol = 'L';
+            inductorSeries.color = PlotColor::Yellow;
+
+            Series currentSeries;
+            currentSeries.name = "Inductor Current";
+            currentSeries.y = currentValues;
+            currentSeries.symbol = 'I';
+            currentSeries.color = PlotColor::Cyan;
+
+            Plot plot(SCREEN_WIDTH, "s", "V / A");
+
+            showHeader("RL Transient Results");
+            std::cout
+                << "RL circuit response:\n\n"
+                << plot.plot(
+                    timeValues,
+                    std::vector<Series>{
+                        resistorSeries,
+                        inductorSeries,
+                        currentSeries
+                    }
+                );
         }
+        else {
+            auto rlcEquations =
+                [R, L, C, Vs](
+                    double /*time*/,
+                    double capacitorVoltage,
+                    double current,
+                    double& voltageDerivative,
+                    double& currentDerivative
+                ) {
+                    voltageDerivative = current / C;
+                    currentDerivative =
+                        (Vs - R * current - capacitorVoltage) / L;
+                };
 
-        // -------------------------------------------------
-        // Create the plot data series.
-        // -------------------------------------------------
+            SecondOrderODESolver solver;
+            solver.solveEuler(
+                rlcEquations,
+                0.0,
+                initialVoltage,
+                initialCurrent,
+                timeStep,
+                stopTime
+            );
 
-        Series capacitorSeries, resistorSeries;
+            const auto& timeValues = solver.getTimeValues();
+            const auto& capacitorVoltageValues = solver.getFirstStateValues();
+            const auto& currentValues = solver.getSecondStateValues();
 
-        capacitorSeries.name = "Capacitor Voltage";
-        capacitorSeries.y = voltageValues;
-        capacitorSeries.symbol = 'C';
-        capacitorSeries.color = PlotColor::Cyan;
+            if (timeValues.size() != capacitorVoltageValues.size() ||
+                timeValues.size() != currentValues.size()) {
+                throw std::runtime_error(
+                    "The RLC solver returned mismatched result vectors."
+                );
+            }
 
-        resistorSeries.name = "Resistor Voltage";
-        resistorSeries.symbol = 'R';
-        resistorSeries.color = PlotColor::Magenta;
-        // For this series RC case, KVL gives Vr = Vs - Vc. Reserve the final size first so the
-        // vector does not repeatedly reallocate while points are appended.
-        resistorSeries.y.reserve(voltageValues.size());
-        for (const auto& vc : voltageValues) {
-            resistorSeries.y.push_back(Vs - vc);
+            std::vector<double> resistorVoltageValues;
+            std::vector<double> inductorVoltageValues;
+            resistorVoltageValues.reserve(currentValues.size());
+            inductorVoltageValues.reserve(currentValues.size());
+
+            for (std::size_t i = 0; i < currentValues.size(); ++i) {
+                const double resistorVoltage = R * currentValues[i];
+                const double inductorVoltage =
+                    Vs - resistorVoltage - capacitorVoltageValues[i];
+
+                resistorVoltageValues.push_back(resistorVoltage);
+                inductorVoltageValues.push_back(inductorVoltage);
+            }
+
+            Series resistorSeries;
+            resistorSeries.name = "Resistor Voltage";
+            resistorSeries.y = resistorVoltageValues;
+            resistorSeries.symbol = 'R';
+            resistorSeries.color = PlotColor::Magenta;
+
+            Series inductorSeries;
+            inductorSeries.name = "Inductor Voltage";
+            inductorSeries.y = inductorVoltageValues;
+            inductorSeries.symbol = 'L';
+            inductorSeries.color = PlotColor::Yellow;
+
+            Series capacitorSeries;
+            capacitorSeries.name = "Capacitor Voltage";
+            capacitorSeries.y = capacitorVoltageValues;
+            capacitorSeries.symbol = 'C';
+            capacitorSeries.color = PlotColor::Cyan;
+
+            Series currentSeries;
+            currentSeries.name = "Inductor Current";
+            currentSeries.y = currentValues;
+            currentSeries.symbol = 'I';
+            currentSeries.color = PlotColor::Green;
+
+            std::vector<Series> series = {
+                resistorSeries,
+                inductorSeries,
+                capacitorSeries,
+                currentSeries
+            };
+
+            Plot plot(
+                SCREEN_WIDTH,
+                "s",
+                "V / A"
+            );
+
+            showHeader("RLC Transient Results");
+
+            std::cout
+                << "RLC circuit response:\n\n"
+                << plot.plot(
+                    timeValues,
+                    series
+                );
         }
-
-        std::vector<Series> series = {
-            capacitorSeries, resistorSeries
-        };
-
-        // -------------------------------------------------
-        // Create the terminal plot.
-        // -------------------------------------------------
-
-        // A fixed width gives predictable terminal output. Automatically using the terminal
-        // width would be more adaptive, but also needs platform-specific terminal-size handling.
-        Plot plot(
-            SCREEN_WIDTH,     // Plot width
-            "s",    // X-axis units
-            "V"     // Y-axis units
-        );
-
-        // -------------------------------------------------
-        // Display the result.
-        // -------------------------------------------------
-
-        showHeader("Transient Analysis Results");
-
-        std::cout
-            << GREEN
-            << "Transient analysis completed successfully.\n"
-            << RESET
-            << '\n'
-            << "Circuit parameters\n"
-            << "------------------------------------------------------------\n"
-            << "R:                 " << R << " ohms\n"
-            << "C:                 " << C << " F\n"
-            << "Source voltage:    " << Vs << " V\n"
-            << "Time constant:     " << timeConstant << " s\n"
-            << "Initial voltage:   " << initialVoltage << " V\n"
-            << "Simulation length: " << stopTime << " s\n"
-            << "Time step:         " << timeStep << " s\n"
-            << "Calculated points: " << timeValues.size() << "\n\n";
-
-        std::cout << plot.plot(
-            timeValues,
-            series
-        );
     }
     catch (const std::exception& error) {
         showHeader("Transient Analysis Error");
-
         std::cout
             << RED
             << "Transient analysis failed.\n\n"
